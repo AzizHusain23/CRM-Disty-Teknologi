@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CustomerController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -8,7 +10,6 @@ Route::get('/', function () {
 });
 
 Route::middleware('guest')->group(function () {
-
     Route::get('/login', [AuthController::class, 'showLogin'])
         ->name('login');
 
@@ -23,11 +24,26 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
-
     Route::get('/dashboard', function () {
         return view('dashboard.index');
     })->name('dashboard');
 
     Route::post('/logout', [AuthController::class, 'logout'])
         ->name('logout');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Companies
+    |--------------------------------------------------------------------------
+    */
+
+    Route::resource('companies', CompanyController::class);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Customers
+    |--------------------------------------------------------------------------
+    */
+
+    Route::resource('customers', CustomerController::class);
 });

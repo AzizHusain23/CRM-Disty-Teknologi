@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -36,52 +37,38 @@
 
             <nav class="space-y-1 p-4">
 
-                <a
-                    href="{{ route('dashboard') }}"
-                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                >
+                <a href="{{ route('dashboard') }}"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Dashboard
                 </a>
 
-                <a
-                    href="#"
-                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                >
+                <a href="{{ route('customers.index') }}"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Customer
                 </a>
 
-                <a
-                    href="#"
-                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                >
+                <a href="{{ route('companies.index') }}"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Perusahaan
                 </a>
 
-                <a
-                    href="#"
-                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                >
+                <a href="#"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Pelatihan
                 </a>
 
-                <a
-                    href="#"
-                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                >
+                <a href="#"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Follow Up
                 </a>
 
-                <a
-                    href="#"
-                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                >
+                <a href="#"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Email Marketing
                 </a>
 
-                <a
-                    href="#"
-                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                >
+                <a href="#"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Laporan
                 </a>
 
@@ -123,10 +110,8 @@
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
 
-                            <button
-                                type="submit"
-                                class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                            >
+                            <button type="submit"
+                                class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
                                 Logout
                             </button>
                         </form>
@@ -160,4 +145,5 @@
     </div>
 
 </body>
+
 </html>
