@@ -9,7 +9,7 @@
                     </svg>
                 </a>
                 <h2 class="font-semibold text-xl text-disty-900 leading-tight">
-                    {{ __('Dashboard CRM Disty Academy') }}
+                    {{ __('Dashboard CRM Disty Akademi') }}
                 </h2>
             </div>
             <div class="flex space-x-3">
