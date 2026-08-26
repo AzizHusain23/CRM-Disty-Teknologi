@@ -57,4 +57,9 @@ class User extends Authenticatable
             'assigned_to'
         );
     }
+
+    public function importBatches(): HasMany
+    {
+        return $this->hasMany(ImportBatch::class);
+    }
 }

@@ -47,6 +47,11 @@
                     Customer
                 </a>
 
+                <a href="{{ route('customer-imports.index') }}"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+                    Import Customer
+                </a>
+
                 <a href="{{ route('institutions.index') }}"
                     class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Instansi

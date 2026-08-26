@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\InstitutionController;
+use App\Http\Controllers\CustomerImportController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -41,4 +42,39 @@ Route::middleware('auth')->group(function () {
         'customers',
         CustomerController::class
     );
+
+    Route::get(
+        '/customer-imports',
+        [CustomerImportController::class, 'index']
+    )->name('customer-imports.index');
+
+    Route::get(
+        '/customer-imports/create',
+        [CustomerImportController::class, 'create']
+    )->name('customer-imports.create');
+
+    Route::get(
+        '/customer-imports/template',
+        [CustomerImportController::class, 'downloadTemplate']
+    )->name('customer-imports.template');
+
+    Route::post(
+        '/customer-imports',
+        [CustomerImportController::class, 'store']
+    )->name('customer-imports.store');
+
+    Route::get(
+        '/customer-imports/{importBatch}',
+        [CustomerImportController::class, 'show']
+    )->name('customer-imports.show');
+
+    Route::post(
+        '/customer-imports/{importBatch}/execute',
+        [CustomerImportController::class, 'execute']
+    )->name('customer-imports.execute');
+
+    Route::delete(
+        '/customer-imports/{importBatch}',
+        [CustomerImportController::class, 'destroy']
+    )->name('customer-imports.destroy');
 });
