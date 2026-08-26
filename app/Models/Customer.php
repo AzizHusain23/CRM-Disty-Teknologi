@@ -4,9 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
 {
@@ -15,7 +15,7 @@ class Customer extends Model
 
     protected $fillable = [
         'customer_code',
-        'company_id',
+        'institution_id',
         'name',
         'email',
         'phone',
@@ -27,9 +27,9 @@ class Customer extends Model
         'notes',
     ];
 
-    public function company(): BelongsTo
+    public function institution(): BelongsTo
     {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Institution::class);
     }
 
     public function registrations(): HasMany

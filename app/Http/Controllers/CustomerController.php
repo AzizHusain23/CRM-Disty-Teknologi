@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
-use App\Models\Company;
 use App\Models\Customer;
+use App\Models\Institution;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,24 +16,49 @@ class CustomerController extends Controller
     public function index(Request $request): View
     {
         $query = Customer::query()
-            ->with('company');
+            ->with('institution');
 
         if ($request->filled('search')) {
-            $search = trim($request->string('search')->toString());
+            $search = trim(
+                $request->string('search')->toString()
+            );
 
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('document_number', 'like', "%{$search}%")
-                    ->orWhere('customer_code', 'like', "%{$search}%")
-                    ->orWhereHas('company', function ($companyQuery) use ($search) {
-                        $companyQuery->where(
-                            'name',
-                            'like',
-                            "%{$search}%"
-                        );
-                    });
+                $q->where(
+                    'name',
+                    'like',
+                    "%{$search}%"
+                )
+                    ->orWhere(
+                        'email',
+                        'like',
+                        "%{$search}%"
+                    )
+                    ->orWhere(
+                        'phone',
+                        'like',
+                        "%{$search}%"
+                    )
+                    ->orWhere(
+                        'document_number',
+                        'like',
+                        "%{$search}%"
+                    )
+                    ->orWhere(
+                        'customer_code',
+                        'like',
+                        "%{$search}%"
+                    )
+                    ->orWhereHas(
+                        'institution',
+                        function ($institutionQuery) use ($search) {
+                            $institutionQuery->where(
+                                'name',
+                                'like',
+                                "%{$search}%"
+                            );
+                        }
+                    );
             });
         }
 
@@ -44,10 +69,10 @@ class CustomerController extends Controller
             );
         }
 
-        if ($request->filled('company_id')) {
+        if ($request->filled('institution_id')) {
             $query->where(
-                'company_id',
-                $request->integer('company_id')
+                'institution_id',
+                $request->integer('institution_id')
             );
         }
 
@@ -56,53 +81,68 @@ class CustomerController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        $companies = Company::query()
+        $institutions = Institution::query()
             ->orderBy('name')
             ->get();
 
         return view(
             'customers.index',
-            compact('customers', 'companies')
+            compact(
+                'customers',
+                'institutions'
+            )
         );
     }
 
     public function create(): View
     {
-        $companies = Company::query()
+        $institutions = Institution::query()
             ->orderBy('name')
             ->get();
 
-        return view('customers.create', compact('companies'));
+        return view(
+            'customers.create',
+            compact('institutions')
+        );
     }
 
     public function store(
         StoreCustomerRequest $request
     ): RedirectResponse {
-        $customer = DB::transaction(function () use ($request) {
-            $customer = Customer::create([
-                'customer_code' => 'TEMP-' . uniqid(),
-                ...$request->validated(),
-            ]);
+        $customer = DB::transaction(
+            function () use ($request) {
+                $customer = Customer::create([
+                    'customer_code' => 'TEMP-' . uniqid(),
+                    ...$request->validated(),
+                ]);
 
-            $customer->update([
-                'customer_code' => sprintf(
-                    'CUS-%06d',
-                    $customer->id
-                ),
-            ]);
+                $customer->update([
+                    'customer_code' => sprintf(
+                        'CUS-%06d',
+                        $customer->id
+                    ),
+                ]);
 
-            return $customer;
-        });
+                return $customer;
+            }
+        );
 
         return redirect()
-            ->route('customers.show', $customer)
-            ->with('success', 'Customer berhasil ditambahkan.');
+            ->route(
+                'customers.show',
+                $customer
+            )
+            ->with(
+                'success',
+                'Customer berhasil ditambahkan.'
+            );
     }
 
-    public function show(Customer $customer): View
-    {
+    public function show(
+        Customer $customer
+    ): View {
         $customer->load([
-            'company',
+            'institution',
             'registrations.training.category',
             'activities.user',
             'followUps.assignedUser',
@@ -114,15 +154,19 @@ class CustomerController extends Controller
         );
     }
 
-    public function edit(Customer $customer): View
-    {
-        $companies = Company::query()
+    public function edit(
+        Customer $customer
+    ): View {
+        $institutions = Institution::query()
             ->orderBy('name')
             ->get();
 
         return view(
             'customers.edit',
-            compact('customer', 'companies')
+            compact(
+                'customer',
+                'institutions'
+            )
         );
     }
 
@@ -135,16 +179,26 @@ class CustomerController extends Controller
         );
 
         return redirect()
-            ->route('customers.show', $customer)
-            ->with('success', 'Data customer berhasil diperbarui.');
+            ->route(
+                'customers.show',
+                $customer
+            )
+            ->with(
+                'success',
+                'Data customer berhasil diperbarui.'
+            );
     }
 
-    public function destroy(Customer $customer): RedirectResponse
-    {
+    public function destroy(
+        Customer $customer
+    ): RedirectResponse {
         $customer->delete();
 
         return redirect()
             ->route('customers.index')
-            ->with('success', 'Customer berhasil dihapus.');
+            ->with(
+                'success',
+                'Customer berhasil dihapus.'
+            );
     }
 }

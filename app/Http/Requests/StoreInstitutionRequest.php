@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreCompanyRequest extends FormRequest
+class StoreInstitutionRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -18,6 +18,11 @@ class StoreCompanyRequest extends FormRequest
                 'required',
                 'string',
                 'max:255',
+            ],
+
+            'type' => [
+                'required',
+                'in:government,school,university,company,foundation,institution,other',
             ],
 
             'email' => [

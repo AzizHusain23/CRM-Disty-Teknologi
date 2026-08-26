@@ -47,9 +47,9 @@
                     Customer
                 </a>
 
-                <a href="{{ route('companies.index') }}"
+                <a href="{{ route('institutions.index') }}"
                     class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
-                    Perusahaan
+                    Instansi
                 </a>
 
                 <a href="#"

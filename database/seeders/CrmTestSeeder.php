@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\Company;
 use App\Models\Customer;
+use App\Models\Institution;
 use App\Models\Training;
 use App\Models\TrainingCategory;
 use App\Models\User;
@@ -23,8 +23,9 @@ class CrmTestSeeder extends Seeder
             ]
         );
 
-        $company = Company::create([
+        $institution = Institution::create([
             'name' => 'PT Demo Akademi',
+            'type' => 'company',
             'email' => 'info@demo-akademi.com',
             'phone' => '081234567890',
             'city' => 'Surabaya',
@@ -33,7 +34,7 @@ class CrmTestSeeder extends Seeder
 
         $customer = Customer::create([
             'customer_code' => 'CUS-000001',
-            'company_id' => $company->id,
+            'institution_id' => $institution->id,
             'name' => 'Budi Santoso',
             'email' => 'budi@example.com',
             'phone' => '081234567890',

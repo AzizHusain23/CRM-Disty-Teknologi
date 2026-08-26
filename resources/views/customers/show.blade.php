@@ -44,12 +44,23 @@
 
             </div>
 
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
 
                 <a href="{{ route('customers.edit', $customer) }}"
                     class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                     Edit
                 </a>
+
+                <form method="POST" action="{{ route('customers.destroy', $customer) }}"
+                    onsubmit="return confirm('Yakin ingin menghapus customer {{ addslashes($customer->name) }}?')">
+                    @csrf
+                    @method('DELETE')
+
+                    <button type="submit"
+                        class="rounded-lg border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50">
+                        Hapus
+                    </button>
+                </form>
 
                 <a href="{{ route('customers.index') }}"
                     class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
@@ -112,14 +123,14 @@
 
                     <div>
                         <dt class="text-xs font-semibold uppercase text-slate-400">
-                            Perusahaan
+                            Instansi
                         </dt>
 
                         <dd class="mt-1 text-sm text-slate-800">
-                            @if ($customer->company)
-                                <a href="{{ route('companies.show', $customer->company) }}"
+                            @if ($customer->institution)
+                                <a href="{{ route('institutions.show', $customer->institution) }}"
                                     class="font-medium text-slate-900 hover:underline">
-                                    {{ $customer->company->name }}
+                                    {{ $customer->institution->name }}
                                 </a>
                             @else
                                 -

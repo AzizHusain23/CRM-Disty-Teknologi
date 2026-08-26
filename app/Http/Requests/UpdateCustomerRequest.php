@@ -38,9 +38,9 @@ class UpdateCustomerRequest extends FormRequest
                 'max:100',
             ],
 
-            'company_id' => [
+            'institution_id' => [
                 'nullable',
-                'exists:companies,id',
+                'exists:institutions,id',
             ],
 
             'city' => [

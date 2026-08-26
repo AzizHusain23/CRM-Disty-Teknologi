@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateCompanyRequest extends FormRequest
+class UpdateInstitutionRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -18,6 +18,11 @@ class UpdateCompanyRequest extends FormRequest
                 'required',
                 'string',
                 'max:255',
+            ],
+
+            'type' => [
+                'required',
+                'in:government,school,university,company,foundation,institution,other',
             ],
 
             'email' => [

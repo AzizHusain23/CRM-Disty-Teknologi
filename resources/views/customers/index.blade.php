@@ -42,7 +42,7 @@
                     </label>
 
                     <input id="search" type="text" name="search" value="{{ request('search') }}"
-                        placeholder="Nama, email, telepon, customer code, perusahaan..."
+                        placeholder="Nama, Email, Telepon, Customer Code, Instansi..."
                         class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10">
 
                 </div>
@@ -74,16 +74,16 @@
 
                 <div>
 
-                    <label for="company_id" class="mb-2 block text-sm font-medium text-slate-700">
-                        Perusahaan
+                    <label for="institution_id" class="mb-2 block text-sm font-medium text-slate-700">
+                        Instansi
                     </label>
 
-                    <select id="company_id" name="company_id"
+                    <select id="institution_id" name="institution_id"
                         class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10">
-                        <option value="">Semua Perusahaan</option>
+                        <option value="">Semua Instansi</option>
 
-                        @foreach ($companies as $company)
-                            <option value="{{ $company->id }}" @selected((string) request('company_id') === (string) $company->id)>
+                        @foreach ($institutions as $company)
+                            <option value="{{ $company->id }}" @selected((string) request('institution_id') === (string) $company->id)>
                                 {{ $company->name }}
                             </option>
                         @endforeach
@@ -123,7 +123,7 @@
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Perusahaan
+                                Instansi
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -157,7 +157,7 @@
                                 </td>
 
                                 <td class="px-6 py-4 text-sm text-slate-600">
-                                    {{ $customer->company?->name ?: '-' }}
+                                    {{ $customer->institution?->name ?: '-' }}
                                 </td>
 
                                 <td class="px-6 py-4">
@@ -203,6 +203,17 @@
                                             class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                                             Edit
                                         </a>
+
+                                        <form method="POST" action="{{ route('customers.destroy', $customer) }}"
+                                            onsubmit="return confirm('Yakin ingin menghapus customer {{ addslashes($customer->name) }}?')">
+                                            @csrf
+                                            @method('DELETE')
+
+                                            <button type="submit"
+                                                class="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50">
+                                                Hapus
+                                            </button>
+                                        </form>
 
                                     </div>
 

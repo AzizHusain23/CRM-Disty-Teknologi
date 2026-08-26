@@ -1,11 +1,11 @@
 @extends('layouts.app')
 
-@section('title', $company->name)
+@section('title', $institution->name)
 
-@section('page-heading', $company->name)
+@section('page-heading', $institution->name)
 
 @section('page-description')
-    Detail perusahaan dan customer terkait.
+    Detail instansi dan customer terkait.
 @endsection
 
 @section('content')
@@ -16,22 +16,33 @@
 
             <div>
                 <h2 class="text-xl font-semibold text-slate-900">
-                    Informasi Perusahaan
+                    {{ $institution->name }}
                 </h2>
 
                 <p class="mt-1 text-sm text-slate-500">
-                    {{ $company->customers->count() }} customer
+                    {{ $institution->customers->count() }} customer
                 </p>
             </div>
 
             <div class="flex gap-2">
 
-                <a href="{{ route('companies.edit', $company) }}"
+                <a href="{{ route('institutions.edit', $institution) }}"
                     class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                     Edit
                 </a>
 
-                <a href="{{ route('companies.index') }}"
+                <form method="POST" action="{{ route('institutions.destroy', $institution) }}"
+                    onsubmit="return confirm('Yakin ingin menghapus instansi ini?')">
+                    @csrf
+                    @method('DELETE')
+
+                    <button type="submit"
+                        class="rounded-lg border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50">
+                        Hapus
+                    </button>
+                </form>
+
+                <a href="{{ route('institutions.index') }}"
                     class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                     Kembali
                 </a>
@@ -42,21 +53,48 @@
 
         <div class="grid gap-6 lg:grid-cols-3">
 
-            <div class="lg:col-span-1 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
                 <h3 class="text-base font-semibold text-slate-900">
-                    Informasi
+                    Informasi Instansi
                 </h3>
 
                 <dl class="mt-6 space-y-4">
 
                     <div>
                         <dt class="text-xs font-semibold uppercase text-slate-400">
-                            Nama
+                            Jenis
                         </dt>
 
                         <dd class="mt-1 text-sm text-slate-800">
-                            {{ $company->name }}
+                            @switch($institution->type)
+                                @case('government')
+                                    Pemerintah
+                                @break
+
+                                @case('school')
+                                    Sekolah
+                                @break
+
+                                @case('university')
+                                    Perguruan Tinggi
+                                @break
+
+                                @case('company')
+                                    Perusahaan
+                                @break
+
+                                @case('foundation')
+                                    Yayasan
+                                @break
+
+                                @case('institution')
+                                    Lembaga
+                                @break
+
+                                @default
+                                    Lainnya
+                            @endswitch
                         </dd>
                     </div>
 
@@ -66,7 +104,7 @@
                         </dt>
 
                         <dd class="mt-1 text-sm text-slate-800">
-                            {{ $company->email ?: '-' }}
+                            {{ $institution->email ?: '-' }}
                         </dd>
                     </div>
 
@@ -76,7 +114,7 @@
                         </dt>
 
                         <dd class="mt-1 text-sm text-slate-800">
-                            {{ $company->phone ?: '-' }}
+                            {{ $institution->phone ?: '-' }}
                         </dd>
                     </div>
 
@@ -86,20 +124,11 @@
                         </dt>
 
                         <dd class="mt-1 text-sm text-slate-800">
-                            {{ $company->city ?: '-' }}
-                            @if ($company->province)
-                                , {{ $company->province }}
+                            {{ $institution->city ?: '-' }}
+
+                            @if ($institution->province)
+                                , {{ $institution->province }}
                             @endif
-                        </dd>
-                    </div>
-
-                    <div>
-                        <dt class="text-xs font-semibold uppercase text-slate-400">
-                            Industri
-                        </dt>
-
-                        <dd class="mt-1 text-sm text-slate-800">
-                            {{ $company->industry ?: '-' }}
                         </dd>
                     </div>
 
@@ -107,20 +136,23 @@
 
             </div>
 
-            <div class="lg:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
 
                 <div class="border-b border-slate-200 px-6 py-5">
+
                     <h3 class="text-base font-semibold text-slate-900">
                         Customer
                     </h3>
+
                 </div>
 
                 <div class="divide-y divide-slate-200">
 
-                    @forelse ($company->customers as $customer)
+                    @forelse ($institution->customers as $customer)
                         <div class="flex items-center justify-between gap-4 px-6 py-5">
 
                             <div>
+
                                 <div class="font-semibold text-slate-900">
                                     {{ $customer->name }}
                                 </div>
@@ -128,6 +160,7 @@
                                 <div class="mt-1 text-sm text-slate-500">
                                     {{ $customer->email ?: 'Email tidak tersedia' }}
                                 </div>
+
                             </div>
 
                             <a href="{{ route('customers.show', $customer) }}"
@@ -140,7 +173,7 @@
                     @empty
 
                         <div class="px-6 py-12 text-center text-sm text-slate-500">
-                            Belum ada customer pada perusahaan ini.
+                            Belum ada customer pada instansi ini.
                         </div>
                     @endforelse
 
