@@ -27,16 +27,19 @@ class CustomerImportService
         string $sheetName,
         Collection $rows
     ): void {
-        $existingKeys = $this->getExistingCustomerKeys();
+        $existingKeys =
+            $this->getExistingCustomerKeys();
 
         $batchKeys = [];
 
         foreach ($rows as $index => $row) {
-            $rowNumber = $index + 2;
+            $rowNumber =
+                $index + 2;
 
-            $data = $this->normalizeRow(
-                $row->toArray()
-            );
+            $data =
+                $this->normalizeRow(
+                    $row->toArray()
+                );
 
             $status = 'ready';
 
@@ -44,10 +47,15 @@ class CustomerImportService
 
             $errorMessage = null;
 
-            if ($data['name'] === null) {
-                $status = 'invalid';
+            if (
+                $data['name']
+                === null
+            ) {
+                $status =
+                    'invalid';
 
-                $errorMessage = 'Nama customer wajib diisi.';
+                $errorMessage =
+                    'Nama customer wajib diisi.';
             }
 
             if (
@@ -58,9 +66,11 @@ class CustomerImportService
                     FILTER_VALIDATE_EMAIL
                 )
             ) {
-                $status = 'invalid';
+                $status =
+                    'invalid';
 
-                $errorMessage = 'Format email tidak valid.';
+                $errorMessage =
+                    'Format email tidak valid.';
             }
 
             if (
@@ -68,7 +78,8 @@ class CustomerImportService
                 && $data['institution_type'] === null
                 && $data['institution_name'] !== null
             ) {
-                $status = 'invalid';
+                $status =
+                    'invalid';
 
                 $errorMessage =
                     'Jenis instansi wajib diisi jika Nama Instansi diisi.';
@@ -83,27 +94,33 @@ class CustomerImportService
                     ]
                 )
             ) {
-                $status = 'invalid';
+                $status =
+                    'invalid';
 
                 $errorMessage =
                     'Jenis instansi tidak sesuai format standar CRM.';
             }
 
             if ($status === 'ready') {
-                $duplicateReason = $this->findDuplicateReason(
-                    $data,
-                    $existingKeys,
-                    $batchKeys
-                );
+                $duplicateReason =
+                    $this->findDuplicateReason(
+                        $data,
+                        $existingKeys,
+                        $batchKeys
+                    );
 
-                if ($duplicateReason !== null) {
-                    $status = 'duplicate';
+                if (
+                    $duplicateReason !== null
+                ) {
+                    $status =
+                        'duplicate';
                 }
             }
 
-            $dedupeKey = $this->buildDedupeKey(
-                $data
-            );
+            $dedupeKey =
+                $this->buildDedupeKey(
+                    $data
+                );
 
             ImportRow::create([
                 'import_batch_id' =>
@@ -162,23 +179,33 @@ class CustomerImportService
                 'total_rows'
             );
 
-            if ($status === 'ready') {
+            if (
+                $status === 'ready'
+            ) {
                 $batch->increment(
                     'ready_rows'
                 );
 
-                if ($dedupeKey !== null) {
-                    $batchKeys[$dedupeKey] = true;
+                if (
+                    $dedupeKey !== null
+                ) {
+                    $batchKeys[
+                        $dedupeKey
+                    ] = true;
                 }
             }
 
-            if ($status === 'duplicate') {
+            if (
+                $status === 'duplicate'
+            ) {
                 $batch->increment(
                     'duplicate_rows'
                 );
             }
 
-            if ($status === 'invalid') {
+            if (
+                $status === 'invalid'
+            ) {
                 $batch->increment(
                     'invalid_rows'
                 );
@@ -186,146 +213,408 @@ class CustomerImportService
         }
     }
 
+    /**
+     * Kompatibilitas dengan pemanggilan lama.
+     *
+     * Sekarang execute() hanya memproses satu chunk.
+     */
     public function execute(
         ImportBatch $batch
-    ): void {
-        DB::transaction(function () use ($batch) {
-            $institutionMap =
-                $this->getInstitutionMap();
+    ): array {
+        return $this->executeChunk(
+            $batch,
+            25
+        );
+    }
 
-            $batch->update([
-                'status' => 'processing',
-                'error_message' => null,
-            ]);
+    /**
+     * Memproses satu chunk kecil.
+     *
+     * Satu chunk = satu database transaction.
+     * Row yang sudah imported tidak pernah diproses ulang.
+     */
+    public function executeChunk(
+        ImportBatch $batch,
+        int $chunkSize = 25
+    ): array {
+        $chunkSize =
+            max(
+                1,
+                min(
+                    $chunkSize,
+                    50
+                )
+            );
 
+        $importedThisChunk = 0;
+
+        DB::transaction(
+            function () use (
+                $batch,
+                $chunkSize,
+                &$importedThisChunk
+            ): void {
+                $institutionMap =
+                    $this->getInstitutionMap();
+
+                $rows =
+                    $batch
+                        ->rows()
+                        ->where(
+                            'status',
+                            'ready'
+                        )
+                        ->orderBy(
+                            'id'
+                        )
+                        ->lockForUpdate()
+                        ->limit(
+                            $chunkSize
+                        )
+                        ->get();
+
+                if (
+                    $rows->isEmpty()
+                ) {
+                    return;
+                }
+
+                $batch->update([
+                    'status' =>
+                        'processing',
+
+                    'error_message' =>
+                        null,
+                ]);
+
+                foreach (
+                    $rows as $importRow
+                ) {
+                    $institutionId =
+                        null;
+
+                    if (
+                        $importRow
+                            ->institution_name
+                            !== null
+                    ) {
+                        $institutionId =
+                            $this->resolveInstitution(
+                                $importRow
+                                    ->institution_name,
+
+                                $importRow
+                                    ->institution_type,
+
+                                $institutionMap
+                            );
+                    }
+
+                    $customer =
+                        Customer::create([
+                            'customer_code' =>
+                                'TEMP-'
+                                . Str::uuid(),
+
+                            'institution_id' =>
+                                $institutionId,
+
+                            'name' =>
+                                $importRow
+                                    ->name,
+
+                            'email' =>
+                                $importRow
+                                    ->email,
+
+                            'phone' =>
+                                $importRow
+                                    ->phone,
+
+                            'document_number' =>
+                                $importRow
+                                    ->document_number,
+
+                            'city' =>
+                                $importRow
+                                    ->raw_data['kota']
+                                ?? null,
+
+                            'province' =>
+                                $importRow
+                                    ->raw_data['provinsi']
+                                ?? null,
+
+                            'status' =>
+                                'active',
+
+                            'source' =>
+                                'excel',
+
+                            'notes' =>
+                                'Imported from '
+                                . $batch
+                                    ->original_filename
+                                . ' / sheet '
+                                . $importRow
+                                    ->sheet_name,
+                        ]);
+
+                    $customer->update([
+                        'customer_code' =>
+                            sprintf(
+                                'CUS-%06d',
+                                $customer->id
+                            ),
+                    ]);
+
+                    $importRow->update([
+                        'status' =>
+                            'imported',
+                    ]);
+
+                    $importedThisChunk++;
+                }
+            }
+        );
+
+        $batch->refresh();
+
+        $remaining =
             $batch
                 ->rows()
-                ->where('status', 'ready')
-                ->orderBy('id')
-                ->chunkById(
-                    250,
-                    function (Collection $rows)
-                    use (&$institutionMap) {
+                ->where(
+                    'status',
+                    'ready'
+                )
+                ->count();
 
-                        foreach ($rows as $importRow) {
-
-                            $institutionId = null;
-
-                            if (
-                                $importRow->institution_name
-                                !== null
-                            ) {
-                                $institutionId =
-                                    $this->resolveInstitution(
-                                        $importRow->institution_name,
-                                        $importRow->institution_type,
-                                        $institutionMap
-                                    );
-                            }
-
-                            $customer =
-                                Customer::create([
-                                    'customer_code' =>
-                                        'TEMP-' . Str::uuid(),
-
-                                    'institution_id' =>
-                                        $institutionId,
-
-                                    'name' =>
-                                        $importRow->name,
-
-                                    'email' =>
-                                        $importRow->email,
-
-                                    'phone' =>
-                                        $importRow->phone,
-
-                                    'document_number' =>
-                                        $importRow->document_number,
-
-                                    'city' =>
-                                        $importRow->raw_data['kota']
-                                        ?? null,
-
-                                    'province' =>
-                                        $importRow->raw_data['provinsi']
-                                        ?? null,
-
-                                    'status' =>
-                                        'active',
-
-                                    'source' =>
-                                        'excel',
-
-                                    'notes' =>
-                                        'Imported from '
-                                        . $importRow->batch->original_filename
-                                        . ' / sheet '
-                                        . $importRow->sheet_name,
-                                ]);
-
-                            $customer->update([
-                                'customer_code' =>
-                                    sprintf(
-                                        'CUS-%06d',
-                                        $customer->id
-                                    ),
-                            ]);
-
-                            $importRow->update([
-                                'status' =>
-                                    'imported',
-                            ]);
-                        }
-                    }
-                );
-
+        if (
+            $remaining === 0
+        ) {
             $batch->update([
                 'status' =>
                     'completed',
 
                 'completed_at' =>
-                    now(),
+                    $batch->completed_at
+                        ?? now(),
+
+                'error_message' =>
+                    null,
             ]);
-        });
+        } else {
+            $batch->update([
+                'status' =>
+                    'processing',
+            ]);
+        }
+
+        return [
+            ...$this->getProgress(
+                $batch
+            ),
+
+            'success' =>
+                true,
+
+            'chunk_size' =>
+                $chunkSize,
+
+            'chunk_processed' =>
+                $importedThisChunk,
+
+            'remaining' =>
+                $remaining,
+
+            'message' =>
+                $remaining === 0
+                    ? 'Semua data ready sudah selesai diimport.'
+                    : sprintf(
+                        '%d customer diproses pada chunk ini. %d masih tersisa.',
+                        $importedThisChunk,
+                        $remaining
+                    ),
+        ];
+    }
+
+    /**
+     * Mengambil status progress aktual dari database.
+     */
+    public function getProgress(
+        ImportBatch $batch
+    ): array {
+        $batch->refresh();
+
+        $imported =
+            $batch
+                ->rows()
+                ->where(
+                    'status',
+                    'imported'
+                )
+                ->count();
+
+        $ready =
+            $batch
+                ->rows()
+                ->where(
+                    'status',
+                    'ready'
+                )
+                ->count();
+
+        $duplicate =
+            $batch
+                ->rows()
+                ->where(
+                    'status',
+                    'duplicate'
+                )
+                ->count();
+
+        $invalid =
+            $batch
+                ->rows()
+                ->where(
+                    'status',
+                    'invalid'
+                )
+                ->count();
+
+        $total =
+            (int) $batch->total_rows;
+
+        $readyTotal =
+            (int) $batch->ready_rows;
+
+        $processed =
+            $imported
+            + $duplicate
+            + $invalid;
+
+        $percentage =
+            $readyTotal > 0
+                ? round(
+                    (
+                        $imported
+                        / $readyTotal
+                    ) * 100,
+                    2
+                )
+                : (
+                    $batch->status === 'completed'
+                        ? 100
+                        : 0
+                );
+
+        $overallPercentage =
+            $total > 0
+                ? round(
+                    (
+                        $processed
+                        / $total
+                    ) * 100,
+                    2
+                )
+                : 0;
+
+        return [
+            'batch_id' =>
+                $batch->id,
+
+            'status' =>
+                $batch->status,
+
+            'total' =>
+                $total,
+
+            'ready_total' =>
+                $readyTotal,
+
+            'imported' =>
+                $imported,
+
+            'remaining' =>
+                $ready,
+
+            'duplicate' =>
+                $duplicate,
+
+            'invalid' =>
+                $invalid,
+
+            'processed' =>
+                $processed,
+
+            'percentage' =>
+                min(
+                    100,
+                    $percentage
+                ),
+
+            'overall_percentage' =>
+                min(
+                    100,
+                    $overallPercentage
+                ),
+
+            'completed_at' =>
+                $batch
+                    ->completed_at
+                    ?->toISOString(),
+
+            'error_message' =>
+                $batch
+                    ->error_message,
+        ];
     }
 
     private function normalizeRow(
         array $row
     ): array {
-        $name = $this->cleanString(
-            $row['nama'] ?? null
-        );
+        $name =
+            $this->cleanString(
+                $row['nama'] ?? null
+            );
 
-        $email = $this->cleanEmail(
-            $row['email'] ?? null
-        );
+        $email =
+            $this->cleanEmail(
+                $row['email'] ?? null
+            );
 
-        $phone = $this->extractPhone(
-            $row['nomor_telepon'] ?? null
-        );
+        $phone =
+            $this->extractPhone(
+                $row['nomor_telepon'] ?? null
+            );
 
         $documentNumber =
             $this->cleanString(
-                $row['nomor_dokumen'] ?? null
+                $row['nomor_dokumen']
+                    ?? null
             );
 
         $institutionName =
             $this->cleanString(
-                $row['nama_instansi'] ?? null
+                $row['nama_instansi']
+                    ?? null
             );
 
         $institutionType =
             $this->cleanString(
-                $row['jenis_instansi'] ?? null
+                $row['jenis_instansi']
+                    ?? null
             );
 
         return [
-            'name' => $name,
+            'name' =>
+                $name,
 
-            'email' => $email,
+            'email' =>
+                $email,
 
-            'phone' => $phone,
+            'phone' =>
+                $phone,
 
             'document_number' =>
                 $documentNumber,
@@ -356,18 +645,27 @@ class CustomerImportService
     private function cleanString(
         mixed $value
     ): ?string {
-        if ($value === null) {
+        if (
+            $value === null
+        ) {
             return null;
         }
 
-        $value = trim((string) $value);
+        $value =
+            trim(
+                (string) $value
+            );
 
-        if ($value === '') {
+        if (
+            $value === ''
+        ) {
             return null;
         }
 
         $lower =
-            Str::lower($value);
+            Str::lower(
+                $value
+            );
 
         if (
             in_array(
@@ -396,41 +694,43 @@ class CustomerImportService
         mixed $value
     ): ?string {
         $value =
-            $this->cleanString($value);
+            $this->cleanString(
+                $value
+            );
 
-        if ($value === null) {
+        if (
+            $value === null
+        ) {
             return null;
         }
 
-        if (
-            filter_var(
-                $value,
-                FILTER_VALIDATE_EMAIL
+        return Str::lower(
+            trim(
+                $value
             )
-        ) {
-            return Str::lower(
-                trim($value)
-            );
-        }
-
-        return null;
+        );
     }
 
     private function extractPhone(
         mixed $value
     ): ?string {
         $value =
-            $this->cleanString($value);
+            $this->cleanString(
+                $value
+            );
 
-        if ($value === null) {
+        if (
+            $value === null
+        ) {
             return null;
         }
 
-        $value = preg_replace(
-            '/[^\d+]/',
-            '',
-            $value
-        );
+        $value =
+            preg_replace(
+                '/[^\d+]/',
+                '',
+                $value
+            );
 
         if (
             $value === null
@@ -445,25 +745,33 @@ class CustomerImportService
     private function normalizeEmail(
         ?string $value
     ): ?string {
-        if ($value === null) {
+        if (
+            $value === null
+        ) {
             return null;
         }
 
         return Str::lower(
-            trim($value)
+            trim(
+                $value
+            )
         );
     }
 
     private function normalizeForComparison(
         ?string $value
     ): ?string {
-        if ($value === null) {
+        if (
+            $value === null
+        ) {
             return null;
         }
 
         $value =
             Str::lower(
-                trim($value)
+                trim(
+                    $value
+                )
             );
 
         $value =
@@ -486,8 +794,9 @@ class CustomerImportService
         array $data
     ): ?string {
         if (
-            $data['normalized_document_number']
-            !== null
+            $data[
+                'normalized_document_number'
+            ] !== null
         ) {
             return 'doc:'
                 . $data[
@@ -496,25 +805,37 @@ class CustomerImportService
         }
 
         if (
-            $data['normalized_name'] !== null
-            && $data['institution_name'] !== null
+            $data['normalized_name']
+                !== null
+            && $data['institution_name']
+                !== null
         ) {
             return 'name_institution:'
-                . $data['normalized_name']
+                . $data[
+                    'normalized_name'
+                ]
                 . '|'
                 . $this->normalizeForComparison(
-                    $data['institution_name']
+                    $data[
+                        'institution_name'
+                    ]
                 );
         }
 
         if (
-            $data['normalized_name'] !== null
-            && $data['normalized_email'] !== null
+            $data['normalized_name']
+                !== null
+            && $data['normalized_email']
+                !== null
         ) {
             return 'name_email:'
-                . $data['normalized_name']
+                . $data[
+                    'normalized_name'
+                ]
                 . '|'
-                . $data['normalized_email'];
+                . $data[
+                    'normalized_email'
+                ];
         }
 
         return null;
@@ -533,15 +854,18 @@ class CustomerImportService
         if (
             $dedupeKey !== null
             && isset(
-                $batchKeys[$dedupeKey]
+                $batchKeys[
+                    $dedupeKey
+                ]
             )
         ) {
             return 'Duplikat pada file Excel yang sama.';
         }
 
         if (
-            $data['normalized_document_number']
-            !== null
+            $data[
+                'normalized_document_number'
+            ] !== null
             && isset(
                 $existingKeys[
                     'doc:'
@@ -555,14 +879,20 @@ class CustomerImportService
         }
 
         if (
-            $data['normalized_email'] !== null
-            && $data['normalized_name'] !== null
+            $data['normalized_email']
+                !== null
+            && $data['normalized_name']
+                !== null
             && isset(
                 $existingKeys[
                     'name_email:'
-                    . $data['normalized_name']
+                    . $data[
+                        'normalized_name'
+                    ]
                     . '|'
-                    . $data['normalized_email']
+                    . $data[
+                        'normalized_email'
+                    ]
                 ]
             )
         ) {
@@ -570,20 +900,28 @@ class CustomerImportService
         }
 
         if (
-            $data['normalized_name'] !== null
-            && $data['institution_name'] !== null
+            $data['normalized_name']
+                !== null
+            && $data['institution_name']
+                !== null
         ) {
             $key =
                 'name_institution:'
-                . $data['normalized_name']
+                . $data[
+                    'normalized_name'
+                ]
                 . '|'
                 . $this->normalizeForComparison(
-                    $data['institution_name']
+                    $data[
+                        'institution_name'
+                    ]
                 );
 
             if (
                 isset(
-                    $existingKeys[$key]
+                    $existingKeys[
+                        $key
+                    ]
                 )
             ) {
                 return 'Nama dan instansi sudah ada di CRM.';
@@ -605,29 +943,37 @@ class CustomerImportService
                 'document_number',
                 'institution_id',
             ])
-            ->with('institution:id,name')
+            ->with(
+                'institution:id,name'
+            )
             ->chunkById(
                 500,
                 function ($customers)
                 use (&$keys) {
-
                     foreach (
-                        $customers as $customer
+                        $customers
+                        as $customer
                     ) {
                         $normalizedName =
-                            $this->normalizeForComparison(
-                                $customer->name
-                            );
+                            $this
+                                ->normalizeForComparison(
+                                    $customer
+                                        ->name
+                                );
 
                         $normalizedEmail =
-                            $this->normalizeEmail(
-                                $customer->email
-                            );
+                            $this
+                                ->normalizeEmail(
+                                    $customer
+                                        ->email
+                                );
 
                         $normalizedDocument =
-                            $this->normalizeForComparison(
-                                $customer->document_number
-                            );
+                            $this
+                                ->normalizeForComparison(
+                                    $customer
+                                        ->document_number
+                                );
 
                         if (
                             $normalizedDocument
@@ -656,17 +1002,19 @@ class CustomerImportService
                         if (
                             $normalizedName
                             !== null
-                            && $customer->institution
+                            && $customer
+                                ->institution
                         ) {
                             $keys[
                                 'name_institution:'
                                 . $normalizedName
                                 . '|'
-                                . $this->normalizeForComparison(
-                                    $customer
-                                        ->institution
-                                        ->name
-                                )
+                                . $this
+                                    ->normalizeForComparison(
+                                        $customer
+                                            ->institution
+                                            ->name
+                                    )
                             ] = true;
                         }
                     }
@@ -690,13 +1038,20 @@ class CustomerImportService
                 function ($institution)
                 use (&$map) {
                     $key =
-                        $this->normalizeForComparison(
-                            $institution->name
-                        );
+                        $this
+                            ->normalizeForComparison(
+                                $institution
+                                    ->name
+                            );
 
-                    if ($key !== null) {
-                        $map[$key] =
-                            $institution->id;
+                    if (
+                        $key !== null
+                    ) {
+                        $map[
+                            $key
+                        ] =
+                            $institution
+                                ->id;
                     }
                 }
             );
@@ -710,11 +1065,14 @@ class CustomerImportService
         array &$institutionMap
     ): ?int {
         $normalizedName =
-            $this->normalizeForComparison(
-                $institutionName
-            );
+            $this
+                ->normalizeForComparison(
+                    $institutionName
+                );
 
-        if ($normalizedName === null) {
+        if (
+            $normalizedName === null
+        ) {
             return null;
         }
 
@@ -746,7 +1104,8 @@ class CustomerImportService
 
         $institutionMap[
             $normalizedName
-        ] = $institution->id;
+        ] =
+            $institution->id;
 
         return $institution->id;
     }

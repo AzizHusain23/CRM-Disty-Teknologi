@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\InstitutionController;
 use App\Http\Controllers\CustomerImportController;
+use App\Http\Controllers\InstitutionController;
+use App\Http\Controllers\TrainingCategoryController;
+use App\Http\Controllers\TrainingController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -11,37 +13,75 @@ Route::get('/', function () {
 });
 
 Route::middleware('guest')->group(function () {
-    Route::get('/login', [AuthController::class, 'showLogin'])
-        ->name('login');
 
-    Route::post('/login', [AuthController::class, 'login'])
-        ->name('login.store');
+    Route::get(
+        '/login',
+        [AuthController::class, 'showLogin']
+    )->name('login');
 
-    Route::get('/register', [AuthController::class, 'showRegister'])
-        ->name('register');
+    Route::post(
+        '/login',
+        [AuthController::class, 'login']
+    )->name('login.store');
 
-    Route::post('/register', [AuthController::class, 'register'])
-        ->name('register.store');
+    Route::get(
+        '/register',
+        [AuthController::class, 'showRegister']
+    )->name('register');
+
+    Route::post(
+        '/register',
+        [AuthController::class, 'register']
+    )->name('register.store');
+
 });
 
 Route::middleware('auth')->group(function () {
 
-    Route::get('/dashboard', function () {
-        return view('dashboard.index');
-    })->name('dashboard');
+    Route::get(
+        '/dashboard',
+        function () {
+            return view(
+                'dashboard.index'
+            );
+        }
+    )->name('dashboard');
 
-    Route::post('/logout', [AuthController::class, 'logout'])
-        ->name('logout');
+    Route::post(
+        '/logout',
+        [AuthController::class, 'logout']
+    )->name('logout');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Institution
+    |--------------------------------------------------------------------------
+    */
 
     Route::resource(
         'institutions',
         InstitutionController::class
     );
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Customer
+    |--------------------------------------------------------------------------
+    */
+
     Route::resource(
         'customers',
         CustomerController::class
     );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Customer Import
+    |--------------------------------------------------------------------------
+    */
 
     Route::get(
         '/customer-imports',
@@ -77,4 +117,36 @@ Route::middleware('auth')->group(function () {
         '/customer-imports/{importBatch}',
         [CustomerImportController::class, 'destroy']
     )->name('customer-imports.destroy');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Training Categories
+    |--------------------------------------------------------------------------
+    */
+
+    Route::resource(
+        'training-categories',
+        TrainingCategoryController::class
+    )
+        ->except([
+            'show',
+        ])
+        ->parameters([
+            'training-categories' =>
+                'trainingCategory',
+        ]);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Trainings
+    |--------------------------------------------------------------------------
+    */
+
+    Route::resource(
+        'trainings',
+        TrainingController::class
+    );
+
 });

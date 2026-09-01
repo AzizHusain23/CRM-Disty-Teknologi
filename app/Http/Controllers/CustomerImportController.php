@@ -6,6 +6,7 @@ use App\Exports\CustomerImportTemplateExport;
 use App\Imports\CustomerExcelImport;
 use App\Models\ImportBatch;
 use App\Services\CustomerImportService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -31,6 +32,14 @@ class CustomerImportController extends Controller
     {
         $batches = ImportBatch::query()
             ->with('user')
+            ->withCount([
+                'rows as imported_rows' => function ($query) {
+                    $query->where('status', 'imported');
+                },
+                'rows as remaining_rows' => function ($query) {
+                    $query->where('status', 'ready');
+                },
+            ])
             ->latest()
             ->paginate(15);
 
@@ -59,25 +68,22 @@ class CustomerImportController extends Controller
         Request $request,
         CustomerImportService $service
     ): RedirectResponse {
-        $validated =
-            $request->validate([
-                'file' => [
-                    'required',
-                    'file',
-                    'mimes:xlsx,xls',
-                    'max:20480',
-                ],
-            ]);
+        $validated = $request->validate([
+            'file' => [
+                'required',
+                'file',
+                'mimes:xlsx,xls',
+                'max:20480',
+            ],
+        ]);
 
-        $file =
-            $validated['file'];
+        $file = $validated['file'];
 
-        $storedPath =
-            Storage::disk('local')
-                ->putFile(
-                    'imports',
-                    $file
-                );
+        $storedPath = Storage::disk('local')
+            ->putFile(
+                'imports',
+                $file
+            );
 
         if ($storedPath === false) {
             return back()
@@ -88,20 +94,19 @@ class CustomerImportController extends Controller
                 ->withInput();
         }
 
-        $batch =
-            ImportBatch::create([
-                'user_id' =>
-                    $request->user()->id,
+        $batch = ImportBatch::create([
+            'user_id' =>
+                $request->user()->id,
 
-                'original_filename' =>
-                    $file->getClientOriginalName(),
+            'original_filename' =>
+                $file->getClientOriginalName(),
 
-                'stored_path' =>
-                    $storedPath,
+            'stored_path' =>
+                $storedPath,
 
-                'status' =>
-                    'validating',
-            ]);
+            'status' =>
+                'validating',
+        ]);
 
         try {
             $absolutePath =
@@ -121,9 +126,14 @@ class CustomerImportController extends Controller
                 'local'
             );
 
+            $batch->refresh();
+
             $batch->update([
                 'status' =>
                     'ready',
+
+                'error_message' =>
+                    null,
             ]);
 
             return redirect()
@@ -179,54 +189,92 @@ class CustomerImportController extends Controller
         );
     }
 
+    /**
+     * Proses satu chunk import saja.
+     *
+     * Endpoint ini sengaja tidak memproses seluruh batch.
+     * Frontend akan memanggil endpoint ini berulang kali.
+     */
     public function execute(
         Request $request,
         ImportBatch $importBatch,
         CustomerImportService $service
-    ): RedirectResponse {
+    ): JsonResponse|RedirectResponse {
         if (
-            $importBatch->status
-            !== 'ready'
+            !in_array(
+                $importBatch->status,
+                [
+                    'ready',
+                    'processing',
+                    'failed',
+                ],
+                true
+            )
         ) {
-            return back()
-                ->with(
-                    'error',
-                    'Batch import ini belum siap untuk dijalankan.'
-                );
+            return $this->executeResponse(
+                $request,
+                $importBatch,
+                false,
+                'Batch import ini belum siap untuk dijalankan.'
+            );
         }
 
-        if (
-            !$importBatch
+        $hasReadyRows =
+            $importBatch
                 ->rows()
                 ->where(
                     'status',
                     'ready'
                 )
-                ->exists()
-        ) {
-            return back()
-                ->with(
-                    'error',
-                    'Tidak ada data valid yang bisa diimport.'
+                ->exists();
+
+        if (!$hasReadyRows) {
+            $importBatch->update([
+                'status' =>
+                    'completed',
+
+                'completed_at' =>
+                    $importBatch->completed_at
+                        ?? now(),
+
+                'error_message' =>
+                    null,
+            ]);
+
+            $progress =
+                $service->getProgress(
+                    $importBatch
                 );
+
+            return $this->executeResponse(
+                $request,
+                $importBatch,
+                true,
+                'Import sudah selesai.',
+                $progress
+            );
         }
 
         try {
-            $service->execute(
-                $importBatch
-            );
-
-            return redirect()
-                ->route(
-                    'customer-imports.show',
-                    $importBatch
-                )
-                ->with(
-                    'success',
-                    'Data customer berhasil diimport ke CRM.'
+            $progress =
+                $service->executeChunk(
+                    $importBatch,
+                    25
                 );
+
+            return $this->executeResponse(
+                $request,
+                $importBatch,
+                true,
+                $progress['status'] === 'completed'
+                    ? 'Import selesai.'
+                    : 'Chunk import berhasil diproses.',
+                $progress
+            );
         } catch (Throwable $e) {
             report($e);
+
+            $importBatch->refresh();
 
             $importBatch->update([
                 'status' =>
@@ -236,11 +284,20 @@ class CustomerImportController extends Controller
                     $e->getMessage(),
             ]);
 
-            return back()
-                ->with(
-                    'error',
-                    'Import gagal dilakukan.'
-                );
+            return response()->json([
+                'success' =>
+                    false,
+
+                'message' =>
+                    'Terjadi kesalahan saat memproses import.',
+
+                'error' =>
+                    $e->getMessage(),
+
+                ...$service->getProgress(
+                    $importBatch
+                ),
+            ], 500);
         }
     }
 
@@ -255,6 +312,17 @@ class CustomerImportController extends Controller
                 ->with(
                     'error',
                     'Batch import yang sudah selesai tidak dapat dihapus dari riwayat.'
+                );
+        }
+
+        if (
+            $importBatch->status
+            === 'processing'
+        ) {
+            return back()
+                ->with(
+                    'error',
+                    'Batch import yang sedang diproses tidak dapat dihapus.'
                 );
         }
 
@@ -279,6 +347,48 @@ class CustomerImportController extends Controller
             ->with(
                 'success',
                 'Batch import berhasil dihapus.'
+            );
+    }
+
+    private function executeResponse(
+        Request $request,
+        ImportBatch $importBatch,
+        bool $success,
+        string $message,
+        ?array $progress = null
+    ): JsonResponse|RedirectResponse {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' =>
+                    $success,
+
+                'message' =>
+                    $message,
+
+                ...($progress ?? []),
+            ]);
+        }
+
+        if ($success) {
+            return redirect()
+                ->route(
+                    'customer-imports.show',
+                    $importBatch
+                )
+                ->with(
+                    'success',
+                    $message
+                );
+        }
+
+        return redirect()
+            ->route(
+                'customer-imports.show',
+                $importBatch
+            )
+            ->with(
+                'error',
+                $message
             );
     }
 
