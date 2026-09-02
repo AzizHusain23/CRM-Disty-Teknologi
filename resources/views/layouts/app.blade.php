@@ -62,6 +62,16 @@
                     Pelatihan
                 </a>
 
+                <a href="{{ route('training-schedules.index') }}"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+                    Jadwal Pelatihan
+                </a>
+
+                <a href="{{ route('trainers.index') }}"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+                    Trainer
+                </a>
+
                 <a href="{{ route('registrations.index') }}"
                     class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Pendaftaran Training

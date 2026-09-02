@@ -166,7 +166,7 @@ class CustomerController extends Controller
         $customer->load([
             'institution',
             'registrations' => function ($query) {
-                $query->with('training.category')
+                $query->with(['training.category','schedule.trainer'])
                     ->orderByRaw('training_date IS NULL')
                     ->orderByDesc('training_date')
                     ->orderByDesc('created_at');

@@ -11,6 +11,8 @@ use App\Http\Controllers\InstitutionController;
 use App\Http\Controllers\FollowUpController;
 use App\Http\Controllers\TrainingCategoryController;
 use App\Http\Controllers\TrainingController;
+use App\Http\Controllers\TrainerController;
+use App\Http\Controllers\TrainingScheduleController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -201,6 +203,11 @@ Route::middleware('auth')->group(function () {
         TrainingController::class
     );
 
+
+
+    Route::resource('trainers', TrainerController::class)->except(['show']);
+
+    Route::resource('training-schedules', TrainingScheduleController::class);
 
     /*
     |--------------------------------------------------------------------------

@@ -164,6 +164,8 @@ class TrainingController extends Controller
         $training->load([
             'category',
             'registrations.customer.institution',
+            'schedules.trainer',
+            'schedules.registrations',
         ]);
 
         return view(

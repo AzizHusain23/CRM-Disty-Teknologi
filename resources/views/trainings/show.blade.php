@@ -62,9 +62,9 @@
             <div class="flex flex-wrap gap-2">
 
                 @if ($training->is_active)
-                    <a href="{{ route('registrations.create', ['training_id' => $training->id]) }}"
+                    <a href="{{ route('training-schedules.create', ['training_id' => $training->id]) }}"
                         class="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
-                        + Daftarkan Customer
+                        + Buat Jadwal
                     </a>
                 @endif
 
@@ -179,7 +179,46 @@
             </div>
 
 
-            {{-- PESERTA --}}
+            {{-- JADWAL --}}
+
+        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5">
+                <div>
+                    <h3 class="text-base font-semibold text-slate-900">Jadwal Pelatihan</h3>
+                    <p class="mt-1 text-sm text-slate-500">Buat batch dan tetapkan trainer terlebih dahulu. Peserta nanti didaftarkan ke jadwal ini.</p>
+                </div>
+                <a href="{{ route('training-schedules.create', ['training_id' => $training->id]) }}" class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">+ Jadwal</a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200">
+                    <thead class="bg-slate-50"><tr>
+                        <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Waktu</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Trainer</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Lokasi</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Peserta</th>
+                        <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Aksi</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-200">
+                        @forelse ($training->schedules->sortBy([['training_date','asc'],['start_time','asc']]) as $schedule)
+                            <tr class="hover:bg-slate-50">
+                                <td class="px-6 py-5 text-sm text-slate-700">{{ $schedule->training_date->format('d M Y') }}</td>
+                                <td class="px-6 py-5 text-sm text-slate-700">{{ substr($schedule->start_time,0,5) }}–{{ substr($schedule->end_time,0,5) }}</td>
+                                <td class="px-6 py-5 text-sm font-semibold text-slate-900">{{ $schedule->trainer->name }}</td>
+                                <td class="px-6 py-5 text-sm text-slate-700">{{ $schedule->location ?: '-' }}</td>
+                                <td class="px-6 py-5 text-sm text-slate-700">{{ $schedule->registrations->where('status','!=','cancelled')->count() }}{{ $schedule->capacity ? ' / '.$schedule->capacity : '' }}</td>
+                                <td class="px-6 py-5 text-right"><a href="{{ route('training-schedules.show',$schedule) }}" class="text-sm font-medium text-slate-700 hover:underline">Detail</a></td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="6" class="px-6 py-12 text-center text-sm text-slate-500">Belum ada jadwal untuk pelatihan ini.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+
+        {{-- PESERTA --}}
 
             <div class="rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
 

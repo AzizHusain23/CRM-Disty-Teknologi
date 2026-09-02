@@ -13,6 +13,7 @@ class Registration extends Model
     protected $fillable = [
         'customer_id',
         'training_id',
+        'training_schedule_id',
         'training_date',
         'status',
         'amount',
@@ -36,5 +37,10 @@ class Registration extends Model
     public function training(): BelongsTo
     {
         return $this->belongsTo(Training::class);
+    }
+
+    public function schedule(): BelongsTo
+    {
+        return $this->belongsTo(TrainingSchedule::class, 'training_schedule_id');
     }
 }

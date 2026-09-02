@@ -80,7 +80,9 @@
                 </div>
 
 
-                <div class="flex justify-end gap-3">
+                <div class="flex flex-wrap justify-between gap-3">
+                    <a href="{{ route('trainings.index') }}" class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">← Kembali ke Pelatihan</a>
+                    <div class="flex gap-3">
 
                     <a href="{{ route('training-categories.index') }}"
                         class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
@@ -91,6 +93,7 @@
                         class="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
                         Simpan Kategori
                     </button>
+                    </div>
 
                 </div>
 

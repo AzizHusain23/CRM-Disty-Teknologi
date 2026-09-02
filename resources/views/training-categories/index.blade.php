@@ -40,10 +40,19 @@
             </div>
 
 
+            <div class="flex flex-wrap gap-2">
+
+            <a href="{{ route('trainings.index') }}"
+                class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                ← Kembali ke Pelatihan
+            </a>
+
             <a href="{{ route('training-categories.create') }}"
                 class="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
                 + Tambah Kategori
             </a>
+
+            </div>
 
         </div>
 

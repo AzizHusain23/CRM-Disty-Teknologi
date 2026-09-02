@@ -258,7 +258,10 @@
                                     <div>
                                         <div class="font-semibold text-slate-900">{{ $registration->training->name }}</div>
                                         <div class="mt-1 text-sm text-slate-500">
-                                            {{ $registration->training_date?->format('d M Y') ?: 'Tanggal belum tersedia' }}
+                                            {{ $registration->schedule?->training_date?->format('d M Y') ?: ($registration->training_date?->format('d M Y') ?: 'Tanggal belum tersedia') }}
+                                            @if ($registration->schedule)
+                                                · {{ substr($registration->schedule->start_time,0,5) }}–{{ substr($registration->schedule->end_time,0,5) }} · Trainer: {{ $registration->schedule->trainer->name }}
+                                            @endif
                                             · {{ $registration->registration_number ?: 'Tanpa nomor registrasi' }}
                                         </div>
                                         @if ($registration->amount !== null)

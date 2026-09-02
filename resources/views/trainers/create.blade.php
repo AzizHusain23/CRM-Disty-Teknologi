@@ -1,0 +1,1 @@
+@extends('layouts.app') @section('title','Tambah Trainer') @section('page-heading','Tambah Trainer') @section('content')<div class="mx-auto max-w-3xl">@include('trainers._form',['trainer'=>null,'action'=>route('trainers.store'),'method'=>'POST','buttonLabel'=>'Simpan Trainer'])</div>@endsection
