@@ -1,0 +1,1 @@
+@extends('layouts.app') @section('title','Edit Trainer') @section('page-heading','Edit Trainer') @section('content')<div class="mx-auto max-w-3xl">@include('trainers._form',['action'=>route('trainers.update',$trainer),'method'=>'PUT','buttonLabel'=>'Simpan Perubahan'])</div>@endsection
