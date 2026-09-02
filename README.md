@@ -37,6 +37,10 @@
    ```
    npm install
    ```
+2. building untuk development
+   ```
+   npm run build
+   ```
 2. Jalankan Node.js
    ```
    npm run dev
