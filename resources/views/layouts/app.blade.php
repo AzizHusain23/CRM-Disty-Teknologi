@@ -69,11 +69,6 @@
 
                 <a href="#"
                     class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
-                    Email Marketing
-                </a>
-
-                <a href="#"
-                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Laporan
                 </a>
 

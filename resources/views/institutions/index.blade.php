@@ -41,19 +41,19 @@
                         <tr>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Instansi
+                                @include('components.table-sort', ['label' => 'Instansi', 'column' => 'name'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Jenis
+                                @include('components.table-sort', ['label' => 'Jenis', 'column' => 'type'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Lokasi
+                                @include('components.table-sort', ['label' => 'Kota', 'column' => 'city'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Customer
+                                @include('components.table-sort', ['label' => 'Customer', 'column' => 'customers_count'])
                             </th>
 
                             <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">

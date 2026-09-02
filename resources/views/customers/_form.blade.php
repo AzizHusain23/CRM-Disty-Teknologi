@@ -168,89 +168,47 @@
 
     </div>
 
-    <div>
+    @if ($customer)
+        <div>
+            <label class="mb-2 block text-sm font-medium text-slate-700">Status Lifecycle</label>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                {{ [
+                    'active' => 'Active',
+                    'prospect' => 'Prospect',
+                    'inactive' => 'Inactive',
+                    'repeat' => 'Repeat Customer',
+                ][$customer->status] ?? ucfirst($customer->status) }}
+            </div>
+            <p class="mt-2 text-xs leading-5 text-slate-500">
+                Status tidak diubah dari form data. Gunakan aksi lifecycle pada halaman detail agar histori customer tetap terjaga.
+            </p>
+        </div>
 
-        <label
-            for="status"
-            class="mb-2 block text-sm font-medium text-slate-700"
-        >
-            Status *
-        </label>
-
-        <select
-            id="status"
-            name="status"
-            required
-            class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
-        >
-
-            @foreach ([
-                'active' => 'Active',
-                'prospect' => 'Prospect',
-                'inactive' => 'Inactive',
-                'repeat' => 'Repeat Customer',
-            ] as $value => $label)
-
-                <option
-                    value="{{ $value }}"
-                    @selected(
-                        old(
-                            'status',
-                            $customer->status ?? 'active'
-                        ) === $value
-                    )
-                >
-                    {{ $label }}
-                </option>
-
-            @endforeach
-
-        </select>
-
-    </div>
-
-    <div>
-
-        <label
-            for="source"
-            class="mb-2 block text-sm font-medium text-slate-700"
-        >
-            Sumber Data *
-        </label>
-
-        <select
-            id="source"
-            name="source"
-            required
-            class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
-        >
-
-            @foreach ([
-                'manual' => 'Manual',
-                'excel' => 'Excel',
-                'academy' => 'Academy',
-                'website' => 'Website',
-                'campaign' => 'Campaign',
-                'import' => 'Import',
-            ] as $value => $label)
-
-                <option
-                    value="{{ $value }}"
-                    @selected(
-                        old(
-                            'source',
-                            $customer->source ?? 'manual'
-                        ) === $value
-                    )
-                >
-                    {{ $label }}
-                </option>
-
-            @endforeach
-
-        </select>
-
-    </div>
+        <div>
+            <label class="mb-2 block text-sm font-medium text-slate-700">Sumber Data</label>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                {{ [
+                    'manual' => 'Manual',
+                    'excel' => 'Excel',
+                    'academy' => 'Academy',
+                    'website' => 'Website',
+                    'campaign' => 'Campaign (legacy)',
+                    'import' => 'Import',
+                ][$customer->source] ?? ucfirst($customer->source) }}
+            </div>
+            <p class="mt-2 text-xs leading-5 text-slate-500">
+                Sumber data bersifat historis dan tidak diubah saat memperbarui profil.
+            </p>
+        </div>
+    @else
+        <div class="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p class="text-sm font-semibold text-amber-900">Lifecycle awal customer</p>
+            <p class="mt-1 text-sm leading-6 text-amber-800">
+                Customer baru otomatis disimpan sebagai <strong>Prospect</strong> dan sumber data
+                <strong>Manual</strong>. Setelah customer dihubungi dan dikonfirmasi, status dapat diubah menjadi Active.
+            </p>
+        </div>
+    @endif
 
     <div class="md:col-span-2">
 

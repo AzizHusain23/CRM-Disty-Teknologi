@@ -59,19 +59,19 @@
                         <tr>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Kategori
+                                @include('components.table-sort', ['label' => 'Kategori', 'column' => 'name'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Deskripsi
+                                @include('components.table-sort', ['label' => 'Deskripsi', 'column' => 'description'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Pelatihan
+                                @include('components.table-sort', ['label' => 'Pelatihan', 'column' => 'trainings_count'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Status
+                                @include('components.table-sort', ['label' => 'Status', 'column' => 'is_active'])
                             </th>
 
                             <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">

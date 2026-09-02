@@ -69,27 +69,27 @@
                         <tr>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Pelatihan
+                                @include('components.table-sort', ['label' => 'Pelatihan', 'column' => 'name'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Kategori
+                                @include('components.table-sort', ['label' => 'Kategori', 'column' => 'category'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Harga
+                                @include('components.table-sort', ['label' => 'Harga', 'column' => 'price'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Durasi
+                                @include('components.table-sort', ['label' => 'Durasi', 'column' => 'duration_hours'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Peserta
+                                @include('components.table-sort', ['label' => 'Peserta', 'column' => 'registrations_count'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Status
+                                @include('components.table-sort', ['label' => 'Status', 'column' => 'is_active'])
                             </th>
 
                             <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">

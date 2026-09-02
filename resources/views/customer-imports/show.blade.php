@@ -33,6 +33,12 @@
 
         $totalRows = (int) $importBatch->total_rows;
 
+        $validatedRows = $importBatch->rows()->count();
+
+        $validationPercentage = $totalRows > 0
+            ? round(($validatedRows / $totalRows) * 100, 2)
+            : 0;
+
         $remainingRows = $importBatch->rows()
             ->where('status', 'ready')
             ->count();
@@ -105,6 +111,7 @@
         <div
             id="import-progress-card"
             data-execute-url="{{ route('customer-imports.execute', $importBatch) }}"
+            data-validation-url="{{ route('customer-imports.validate', $importBatch) }}"
             data-status="{{ $importBatch->status }}"
             data-ready="{{ $readyRows }}"
             data-imported="{{ $importedRows }}"
@@ -121,15 +128,17 @@
 
                 <div>
 
-                    <h3 class="text-lg font-semibold text-slate-900">
-                        Progress Import
+                    <h3 id="progress-title" class="text-lg font-semibold text-slate-900">
+                        {{ $importBatch->status === 'validating' ? 'Progress Validasi' : 'Progress Import' }}
                     </h3>
 
                     <p
                         id="progress-message"
                         class="mt-1 text-sm text-slate-500"
                     >
-                        @if ($importBatch->status === 'completed')
+                        @if ($importBatch->status === 'validating')
+                            File sedang divalidasi secara bertahap.
+                        @elseif ($importBatch->status === 'completed')
                             Import selesai.
                         @elseif ($importBatch->status === 'processing')
                             Import sedang berjalan.
@@ -145,7 +154,17 @@
 
                 {{-- Tombol --}}
 
-                @if ($importBatch->status === 'completed')
+                @if ($importBatch->status === 'validating')
+
+                    <button
+                        id="import-button"
+                        type="button"
+                        class="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800"
+                    >
+                        Lanjutkan Validasi
+                    </button>
+
+                @elseif ($importBatch->status === 'completed')
 
                     <span class="inline-flex items-center rounded-lg bg-green-100 px-5 py-2.5 text-sm font-semibold text-green-700">
                         Import Selesai
@@ -198,16 +217,18 @@
                         id="progress-percent"
                         class="text-sm font-bold text-blue-700"
                     >
-                        {{ number_format($progressPercentage, 2) }}%
+                        {{ number_format($importBatch->status === 'validating' ? $validationPercentage : $progressPercentage, 2) }}%
                     </span>
 
                     <span
                         id="progress-count"
                         class="text-sm font-medium text-slate-600"
                     >
-                        {{ number_format($importedRows) }}
-                        /
-                        {{ number_format($readyRows) }}
+                        @if ($importBatch->status === 'validating')
+                            {{ number_format($validatedRows) }} / {{ number_format($totalRows) }}
+                        @else
+                            {{ number_format($importedRows) }} / {{ number_format($readyRows) }}
+                        @endif
                     </span>
 
                 </div>
@@ -218,7 +239,7 @@
                     <div
                         id="progress-bar"
                         class="h-full rounded-full bg-blue-700 transition-all duration-300"
-                        style="width: {{ min(100, $progressPercentage) }}%"
+                        style="width: {{ min(100, $importBatch->status === 'validating' ? $validationPercentage : $progressPercentage) }}%"
                     ></div>
 
                 </div>
@@ -323,7 +344,11 @@
                 "
             >
 
-                @if ($importBatch->status === 'completed')
+                @if ($importBatch->status === 'validating')
+
+                    {{ number_format($validatedRows) }} dari {{ number_format($totalRows) }} baris sudah divalidasi.
+
+                @elseif ($importBatch->status === 'completed')
 
                     {{ number_format($importedRows) }}
                     customer berhasil dimasukkan ke CRM.
@@ -362,9 +387,58 @@
                 </h3>
 
                 <p class="mt-1 text-sm text-slate-500">
-                    Menampilkan maksimal 50 baris per halaman.
+                    Gunakan filter status, sorting, dan jumlah baris untuk memeriksa hasil validasi.
                 </p>
 
+            </div>
+
+            <div class="border-b border-slate-200 px-6 py-4">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        @php
+                            $statusFilters = [
+                                '' => 'All ' . number_format($totalRows),
+                                'ready' => 'Ready ' . number_format($readyRows),
+                                'duplicate' => 'Duplicate ' . number_format($duplicateRows),
+                                'invalid' => 'Invalid ' . number_format($invalidRows),
+                            ];
+                        @endphp
+
+                        @foreach ($statusFilters as $value => $label)
+                            <a href="{{ request()->fullUrlWithQuery(['status' => $value, 'page' => 1]) }}"
+                                class="rounded-lg px-3 py-2 text-sm font-semibold transition
+                                    {{ request('status', '') === $value
+                                        ? 'bg-slate-900 text-white'
+                                        : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50' }}">
+                                {{ $label }}
+                            </a>
+                        @endforeach
+
+                        @if ($invalidRows > 0)
+                            <span class="text-xs text-red-600">
+                                {{ number_format($invalidRows) }} data perlu diperiksa.
+                            </span>
+                        @endif
+                    </div>
+
+                    <div class="flex items-center gap-2 text-sm">
+                        <span class="text-slate-500">Tampilkan</span>
+                        <form method="GET" class="inline-flex items-center gap-2">
+                            @foreach (request()->except('per_page', 'page') as $key => $value)
+                                <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                            @endforeach
+                            <select name="per_page" onchange="this.form.submit()"
+                                class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                @foreach ($perPageOptions as $option)
+                                    <option value="{{ $option }}" @selected($perPage === $option)>{{ $option }}</option>
+                                @endforeach
+                            </select>
+                        </form>
+                        <span class="text-slate-500">baris</span>
+                    </div>
+
+                </div>
             </div>
 
 
@@ -377,35 +451,35 @@
                         <tr>
 
                             <th class="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Sheet
+                                @include('components.table-sort', ['label' => 'Sheet', 'column' => 'sheet_name'])
                             </th>
 
                             <th class="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Row
+                                @include('components.table-sort', ['label' => 'Row', 'column' => 'row_number'])
                             </th>
 
                             <th class="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Nama
+                                @include('components.table-sort', ['label' => 'Nama', 'column' => 'name'])
                             </th>
 
                             <th class="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Email
+                                @include('components.table-sort', ['label' => 'Email', 'column' => 'email'])
                             </th>
 
                             <th class="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Telepon
+                                @include('components.table-sort', ['label' => 'Telepon', 'column' => 'phone'])
                             </th>
 
                             <th class="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Instansi
+                                @include('components.table-sort', ['label' => 'Instansi', 'column' => 'institution_name'])
                             </th>
 
                             <th class="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Jenis Instansi
+                                @include('components.table-sort', ['label' => 'Jenis Instansi', 'column' => 'institution_type'])
                             </th>
 
                             <th class="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Status
+                                @include('components.table-sort', ['label' => 'Status', 'column' => 'status'])
                             </th>
 
                             <th class="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -472,11 +546,23 @@
                                         };
                                     @endphp
 
-                                    <span
-                                        class="rounded-full px-3 py-1 text-xs font-semibold {{ $rowStatusClass }}"
-                                    >
-                                        {{ ucfirst($row->status) }}
-                                    </span>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span
+                                            class="rounded-full px-3 py-1 text-xs font-semibold {{ $rowStatusClass }}"
+                                        >
+                                            {{ ucfirst($row->status) }}
+                                        </span>
+
+                                        @if ($row->status === 'invalid')
+                                            <button
+                                                type="button"
+                                                class="edit-import-row rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                                data-target="edit-import-row-{{ $row->id }}"
+                                            >
+                                                Edit
+                                            </button>
+                                        @endif
+                                    </div>
 
                                 </td>
 
@@ -499,6 +585,65 @@
                                 </td>
 
                             </tr>
+
+                            @if ($row->status === 'invalid')
+                                <tr id="edit-import-row-{{ $row->id }}" class="hidden bg-slate-50">
+                                    <td colspan="9" class="px-6 py-5">
+                                        <form method="POST" action="{{ route('customer-imports.rows.update', [$importBatch, $row]) }}" class="edit-import-form space-y-4">
+                                            @csrf
+                                            @method('PUT')
+
+                                            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                                <div>
+                                                    <label class="mb-1 block text-xs font-semibold text-slate-600">Nama *</label>
+                                                    <input name="name" value="{{ $row->name }}" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                                </div>
+                                                <div>
+                                                    <label class="mb-1 block text-xs font-semibold text-slate-600">Email</label>
+                                                    <input type="email" name="email" value="{{ $row->email }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                                </div>
+                                                <div>
+                                                    <label class="mb-1 block text-xs font-semibold text-slate-600">No. Telepon</label>
+                                                    <input name="phone" value="{{ $row->phone }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                                </div>
+                                                <div>
+                                                    <label class="mb-1 block text-xs font-semibold text-slate-600">No. Dokumen</label>
+                                                    <input name="document_number" value="{{ $row->document_number }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                                </div>
+                                                <div>
+                                                    <label class="mb-1 block text-xs font-semibold text-slate-600">Nama Instansi</label>
+                                                    <input name="institution_name" value="{{ $row->institution_name }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                                </div>
+                                                <div>
+                                                    <label class="mb-1 block text-xs font-semibold text-slate-600">Jenis Instansi</label>
+                                                    <select name="institution_type" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                                        <option value="">-- Kosong --</option>
+                                                        @foreach (['Pemerintah', 'Sekolah', 'Perguruan Tinggi', 'Perusahaan', 'Yayasan', 'Lembaga', 'Lainnya'] as $type)
+                                                            <option value="{{ $type }}" @selected($row->institution_type === $type)>{{ $type }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="mb-1 block text-xs font-semibold text-slate-600">Kota</label>
+                                                    <input name="city" value="{{ $row->raw_data['kota'] ?? '' }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                                </div>
+                                                <div>
+                                                    <label class="mb-1 block text-xs font-semibold text-slate-600">Provinsi</label>
+                                                    <input name="province" value="{{ $row->raw_data['provinsi'] ?? '' }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                                </div>
+                                            </div>
+
+                                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                                <p class="text-xs text-slate-500">Setelah disimpan, baris akan divalidasi ulang.</p>
+                                                <div class="flex gap-2">
+                                                    <button type="button" class="cancel-edit-import-row rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white">Batal</button>
+                                                    <button type="submit" class="save-edit-import-row rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800">Simpan & Validasi</button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @endif
 
                         @empty
 
@@ -534,563 +679,231 @@
 
 
 <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const container = document.getElementById('import-progress-card');
+    if (!container) return;
 
-document.addEventListener(
-    'DOMContentLoaded',
-    function () {
+    const button = document.getElementById('import-button');
+    const executeUrl = container.dataset.executeUrl;
+    const validationUrl = container.dataset.validationUrl;
+    const csrfToken = @json(csrf_token());
 
-        const container =
-            document.getElementById(
-                'import-progress-card'
-            );
+    const title = document.getElementById('progress-title');
+    const progressBar = document.getElementById('progress-bar');
+    const progressPercent = document.getElementById('progress-percent');
+    const progressCount = document.getElementById('progress-count');
+    const progressMessage = document.getElementById('progress-message');
+    const progressStatus = document.getElementById('progress-status');
+    const statTotal = document.getElementById('stat-total');
+    const statImported = document.getElementById('stat-imported');
+    const statDuplicate = document.getElementById('stat-duplicate');
+    const statInvalid = document.getElementById('stat-invalid');
 
+    let running = false;
+    const formatNumber = value => new Intl.NumberFormat('id-ID').format(value ?? 0);
 
-        const button =
-            document.getElementById(
-                'import-button'
-            );
+    function renderValidation(data) {
+        const percentage = Number(data.percentage ?? 0);
+        title.textContent = 'Progress Validasi';
+        progressBar.style.width = Math.min(100, percentage) + '%';
+        progressBar.className = 'h-full rounded-full bg-blue-700 transition-all duration-300';
+        progressPercent.textContent = percentage.toFixed(2) + '%';
+        progressCount.textContent = formatNumber(data.validated) + ' / ' + formatNumber(data.total);
+        statTotal.textContent = formatNumber(data.total);
+        statImported.textContent = formatNumber(data.ready);
+        statDuplicate.textContent = formatNumber(data.duplicate);
+        statInvalid.textContent = formatNumber(data.invalid);
 
-
-        if (!container) {
+        if (data.status === 'ready') {
+            progressMessage.textContent = 'Validasi selesai.';
+            progressStatus.textContent = 'File selesai dianalisis. Anda sekarang bisa memperbaiki data invalid sebelum import.';
+            progressStatus.className = 'mt-6 rounded-xl bg-green-50 px-5 py-4 text-sm text-green-800';
+            progressBar.className = 'h-full rounded-full bg-green-600 transition-all duration-300';
+            running = false;
+            window.location.reload();
             return;
         }
 
-
-        const executeUrl =
-            container.dataset.executeUrl;
-
-
-        const csrfToken =
-            @json(csrf_token());
-
-
-        const progressBar =
-            document.getElementById(
-                'progress-bar'
-            );
-
-
-        const progressPercent =
-            document.getElementById(
-                'progress-percent'
-            );
-
-
-        const progressCount =
-            document.getElementById(
-                'progress-count'
-            );
-
-
-        const progressMessage =
-            document.getElementById(
-                'progress-message'
-            );
-
-
-        const progressStatus =
-            document.getElementById(
-                'progress-status'
-            );
-
-
-        const statTotal =
-            document.getElementById(
-                'stat-total'
-            );
-
-
-        const statImported =
-            document.getElementById(
-                'stat-imported'
-            );
-
-
-        const statDuplicate =
-            document.getElementById(
-                'stat-duplicate'
-            );
-
-
-        const statInvalid =
-            document.getElementById(
-                'stat-invalid'
-            );
-
-
-        let running = false;
-
-
-        function formatNumber(
-            value
-        ) {
-
-            return new Intl.NumberFormat(
-                'id-ID'
-            ).format(
-                value ?? 0
-            );
-
-        }
-
-
-        function renderProgress(
-            data
-        ) {
-
-            const percentage =
-                Number(
-                    data.percentage
-                    ?? data.overall_percentage
-                    ?? 0
-                );
-
-
-            progressBar.style.width =
-                Math.min(
-                    100,
-                    percentage
-                ) + '%';
-
-
-            progressPercent.textContent =
-                percentage.toFixed(
-                    2
-                ) + '%';
-
-
-            progressCount.textContent =
-                formatNumber(
-                    data.imported
-                )
-                + ' / '
-                + formatNumber(
-                    data.ready_total
-                );
-
-
-            statTotal.textContent =
-                formatNumber(
-                    data.total
-                );
-
-
-            statImported.textContent =
-                formatNumber(
-                    data.imported
-                );
-
-
-            statDuplicate.textContent =
-                formatNumber(
-                    data.duplicate
-                );
-
-
-            statInvalid.textContent =
-                formatNumber(
-                    data.invalid
-                );
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | COMPLETED
-            |--------------------------------------------------------------------------
-            */
-
-            if (
-                data.status ===
-                'completed'
-            ) {
-
-                progressMessage.textContent =
-                    'Import selesai.';
-
-
-                progressStatus.textContent =
-                    formatNumber(
-                        data.imported
-                    )
-                    + ' customer berhasil dimasukkan ke CRM.';
-
-
-                progressStatus.className =
-                    'mt-6 rounded-xl bg-green-50 px-5 py-4 text-sm text-green-800';
-
-
-                progressBar.className =
-                    'h-full rounded-full bg-green-600 transition-all duration-300';
-
-
-                if (button) {
-
-                    button.disabled =
-                        true;
-
-                    button.textContent =
-                        'Import Selesai';
-
-                    button.className =
-                        'rounded-lg bg-green-100 px-5 py-2.5 text-sm font-semibold text-green-700';
-
-                }
-
-
-                running =
-                    false;
-
-                return;
-
-            }
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | FAILED
-            |--------------------------------------------------------------------------
-            */
-
-            if (
-                data.status ===
-                'failed'
-            ) {
-
-                progressMessage.textContent =
-                    'Import berhenti karena terjadi kesalahan.';
-
-
-                progressStatus.textContent =
-                    data.error_message
-                    || 'Import gagal dilakukan.';
-
-
-                progressStatus.className =
-                    'mt-6 rounded-xl bg-red-50 px-5 py-4 text-sm text-red-800';
-
-
-                if (button) {
-
-                    button.disabled =
-                        false;
-
-                    button.textContent =
-                        'Lanjutkan Import';
-
-                }
-
-
-                running =
-                    false;
-
-                return;
-
-            }
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | PROCESSING
-            |--------------------------------------------------------------------------
-            */
-
-            progressMessage.textContent =
-                formatNumber(
-                    data.imported
-                )
-                + ' customer sudah masuk dari '
-                + formatNumber(
-                    data.ready_total
-                )
-                + ' data yang siap diimport.';
-
-
-            progressStatus.textContent =
-                formatNumber(
-                    data.remaining
-                )
-                + ' data masih menunggu diproses.';
-
-
-            progressStatus.className =
-                'mt-6 rounded-xl bg-blue-50 px-5 py-4 text-sm text-blue-800';
-
-        }
-
-
-        async function processNextChunk() {
-
-            if (!running) {
-                return;
-            }
-
-
-            try {
-
-                const response =
-                    await fetch(
-                        executeUrl,
-                        {
-                            method:
-                                'POST',
-
-                            headers: {
-
-                                'Accept':
-                                    'application/json',
-
-                                'Content-Type':
-                                    'application/json',
-
-                                'X-CSRF-TOKEN':
-                                    csrfToken,
-
-                                'X-Requested-With':
-                                    'XMLHttpRequest',
-
-                            },
-
-                            body:
-                                JSON.stringify({}),
-
-                        }
-                    );
-
-
-                const data =
-                    await response.json();
-
-
-                if (
-                    !response.ok
-                ) {
-
-                    throw new Error(
-                        data.error_message
-                        || data.message
-                        || 'Import gagal.'
-                    );
-
-                }
-
-
-                renderProgress(
-                    data
-                );
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | LANJUT KE CHUNK BERIKUTNYA
-                |--------------------------------------------------------------------------
-                |
-                | Selama masih ada row READY,
-                | request berikutnya otomatis dijalankan.
-                |
-                */
-
-                if (
-                    data.status ===
-                        'processing'
-                    && Number(
-                        data.remaining
-                    ) > 0
-                    && running
-                ) {
-
-                    setTimeout(
-                        function () {
-
-                            processNextChunk();
-
-                        },
-                        100
-                    );
-
-                }
-
-            } catch (
-                error
-            ) {
-
-                console.error(
-                    'Customer Import Error:',
-                    error
-                );
-
-
-                running =
-                    false;
-
-
-                progressMessage.textContent =
-                    'Import berhenti sementara.';
-
-
-                progressStatus.textContent =
-                    'Koneksi terputus. Klik "Lanjutkan Import" untuk meneruskan.';
-
-
-                progressStatus.className =
-                    'mt-6 rounded-xl bg-red-50 px-5 py-4 text-sm text-red-800';
-
-
-                if (button) {
-
-                    button.disabled =
-                        false;
-
-                    button.textContent =
-                        'Lanjutkan Import';
-
-                }
-
-            }
-
-        }
-
-
-        function startImport() {
-
-            if (running) {
-                return;
-            }
-
-
-            running =
-                true;
-
-
+        if (data.status === 'failed') {
+            progressMessage.textContent = 'Validasi gagal.';
+            progressStatus.textContent = data.error_message || data.message || 'Validasi gagal dilakukan.';
+            progressStatus.className = 'mt-6 rounded-xl bg-red-50 px-5 py-4 text-sm text-red-800';
             if (button) {
+                button.disabled = false;
+                button.textContent = 'Lanjutkan Validasi';
+            }
+            running = false;
+            return;
+        }
 
-                button.disabled =
-                    true;
+        progressMessage.textContent = 'Validasi berjalan bertahap agar request tidak timeout.';
+        progressStatus.textContent = formatNumber(data.remaining) + ' baris masih menunggu divalidasi.';
+        progressStatus.className = 'mt-6 rounded-xl bg-blue-50 px-5 py-4 text-sm text-blue-800';
+    }
 
-                button.textContent =
-                    'Importing...';
+    async function processValidation() {
+        if (!running) return;
+        try {
+            const response = await fetch(validationUrl, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const data = await response.json();
+            renderValidation(data);
+            if (!response.ok || data.status === 'failed') {
+                throw new Error(data.error_message || data.message || 'Validasi gagal.');
+            }
+            if (data.status !== 'ready' && running) setTimeout(processValidation, 100);
+        } catch (error) {
+            console.error('Validation error:', error);
+            running = false;
+            progressMessage.textContent = 'Validasi berhenti sementara.';
+            progressStatus.textContent = error.message || 'Koneksi terputus. Klik tombol untuk melanjutkan.';
+            progressStatus.className = 'mt-6 rounded-xl bg-red-50 px-5 py-4 text-sm text-red-800';
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Lanjutkan Validasi';
+            }
+        }
+    }
 
-                button.className =
-                    'rounded-lg bg-slate-400 px-5 py-2.5 text-sm font-semibold text-white cursor-not-allowed';
+    async function processImport() {
+        if (!running) return;
+        try {
+            const response = await fetch(executeUrl, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({}),
+            });
+            const data = await response.json();
+            const percentage = Number(data.percentage ?? data.overall_percentage ?? 0);
+            progressBar.style.width = Math.min(100, percentage) + '%';
+            progressBar.className = 'h-full rounded-full bg-blue-700 transition-all duration-300';
+            progressPercent.textContent = percentage.toFixed(2) + '%';
+            progressCount.textContent = formatNumber(data.imported) + ' / ' + formatNumber(data.ready_total);
+            statTotal.textContent = formatNumber(data.total);
+            statImported.textContent = formatNumber(data.imported);
+            statDuplicate.textContent = formatNumber(data.duplicate);
+            statInvalid.textContent = formatNumber(data.invalid);
 
+            if (!response.ok) throw new Error(data.error_message || data.message || 'Import gagal.');
+
+            if (data.status === 'completed') {
+                title.textContent = 'Progress Import';
+                progressMessage.textContent = 'Import selesai.';
+                progressStatus.textContent = formatNumber(data.imported) + ' customer berhasil dimasukkan ke CRM.';
+                progressStatus.className = 'mt-6 rounded-xl bg-green-50 px-5 py-4 text-sm text-green-800';
+                progressBar.className = 'h-full rounded-full bg-green-600 transition-all duration-300';
+                if (button) {
+                    button.disabled = true;
+                    button.textContent = 'Import Selesai';
+                }
+                running = false;
+                window.location.reload();
+                return;
             }
 
-
-            progressMessage.textContent =
-                'Import sedang diproses...';
-
-
-            progressStatus.textContent =
-                'Memproses data customer secara bertahap.';
-
-
-            progressStatus.className =
-                'mt-6 rounded-xl bg-blue-50 px-5 py-4 text-sm text-blue-800';
-
-
-            processNextChunk();
-
+            title.textContent = 'Progress Import';
+            progressMessage.textContent = formatNumber(data.imported) + ' customer sudah masuk dari ' + formatNumber(data.ready_total) + ' data yang siap diimport.';
+            progressStatus.textContent = formatNumber(data.remaining) + ' data masih menunggu diproses.';
+            progressStatus.className = 'mt-6 rounded-xl bg-blue-50 px-5 py-4 text-sm text-blue-800';
+            if (running) setTimeout(processImport, 100);
+        } catch (error) {
+            console.error('Customer Import Error:', error);
+            running = false;
+            progressMessage.textContent = 'Import berhenti sementara.';
+            progressStatus.textContent = error.message || 'Koneksi terputus. Klik tombol untuk meneruskan.';
+            progressStatus.className = 'mt-6 rounded-xl bg-red-50 px-5 py-4 text-sm text-red-800';
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Lanjutkan Import';
+            }
         }
+    }
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | Tombol Import
-        |--------------------------------------------------------------------------
-        */
-
+    function startValidation() {
+        if (running) return;
+        running = true;
         if (button) {
-
-            button.addEventListener(
-                'click',
-                function () {
-
-                    startImport();
-
-                }
-            );
-
+            button.disabled = true;
+            button.textContent = 'Validating...';
         }
+        processValidation();
+    }
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | AUTO RESUME
-        |--------------------------------------------------------------------------
-        |
-        | Kalau user membuka kembali halaman ketika batch masih
-        | processing, import otomatis dilanjutkan.
-        |
-        */
-
-        const initialStatus =
-            container.dataset.status;
-
-
-        if (
-            initialStatus ===
-            'processing'
-        ) {
-
-            startImport();
-
+    function startImport() {
+        if (running) return;
+        running = true;
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Importing...';
         }
+        processImport();
+    }
 
+    if (button) {
+        button.addEventListener('click', function () {
+            if (container.dataset.status === 'validating') startValidation();
+            else startImport();
+        });
+    }
 
-        /*
-        |--------------------------------------------------------------------------
-        | INITIAL COMPLETED STATE
-        |--------------------------------------------------------------------------
-        */
+    const initialStatus = container.dataset.status;
+    if (initialStatus === 'validating') startValidation();
+    if (initialStatus === 'processing') startImport();
 
-        if (
-            initialStatus ===
-            'completed'
-        ) {
-
-            renderProgress({
-
-                status:
-                    'completed',
-
-                total:
-                    Number(
-                        container.dataset.total
-                    ),
-
-                ready_total:
-                    Number(
-                        container.dataset.ready
-                    ),
-
-                imported:
-                    Number(
-                        container.dataset.imported
-                    ),
-
-                remaining:
-                    0,
-
-                duplicate:
-                    Number(
-                        container.dataset.duplicate
-                    ),
-
-                invalid:
-                    Number(
-                        container.dataset.invalid
-                    ),
-
-                percentage:
-                    Number(
-                        {{ $progressPercentage }}
-                    ),
-
-            });
-
-        }
-
+    document.querySelectorAll('.edit-import-row').forEach(function (editButton) {
+        editButton.addEventListener('click', function () {
+            const target = document.getElementById(editButton.dataset.target);
+            if (target) target.classList.toggle('hidden');
+        });
     });
 
+    document.querySelectorAll('.cancel-edit-import-row').forEach(function (cancelButton) {
+        cancelButton.addEventListener('click', function () {
+            const row = cancelButton.closest('tr');
+            if (row) row.classList.add('hidden');
+        });
+    });
+
+    document.querySelectorAll('.edit-import-form').forEach(function (form) {
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const saveButton = form.querySelector('.save-edit-import-row');
+            saveButton.disabled = true;
+            saveButton.textContent = 'Menyimpan...';
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: new FormData(form),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || data.error_message || 'Baris gagal diperbarui.');
+                }
+                window.location.reload();
+            } catch (error) {
+                alert(error.message || 'Baris gagal diperbarui.');
+                saveButton.disabled = false;
+                saveButton.textContent = 'Simpan & Validasi';
+            }
+        });
+    });
+});
 </script>
 
 @endsection

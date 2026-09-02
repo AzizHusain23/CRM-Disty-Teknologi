@@ -10,16 +10,32 @@ use Throwable;
 
 class TrainingCategoryController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
+        $sort = $request->string('sort')->toString();
+        $sort = in_array($sort, ['name', 'description', 'trainings_count', 'is_active'], true)
+            ? $sort
+            : 'name';
+
+        $direction = strtolower($request->string('direction')->toString());
+        $direction = in_array($direction, ['asc', 'desc'], true)
+            ? $direction
+            : 'asc';
+
+        $perPageOptions = [25, 50, 100, 200, 500];
+        $perPage = (int) $request->integer('per_page', 50);
+        if (!in_array($perPage, $perPageOptions, true)) {
+            $perPage = 50;
+        }
+
         $categories = TrainingCategory::query()
             ->withCount('trainings')
-            ->orderBy('name')
-            ->paginate(15);
+            ->orderBy($sort, $direction)
+            ->paginate($perPage);
 
         return view(
             'training-categories.index',
-            compact('categories')
+            compact('categories', 'sort', 'direction', 'perPage', 'perPageOptions')
         );
     }
 

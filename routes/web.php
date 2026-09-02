@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerImportController;
@@ -76,6 +77,22 @@ Route::middleware('auth')->group(function () {
         CustomerController::class
     );
 
+    Route::post(
+        '/customers/{customer}/activate',
+        [CustomerController::class, 'activate']
+    )->name('customers.activate');
+
+    Route::post(
+        '/customers/{customer}/deactivate',
+        [CustomerController::class, 'deactivate']
+    )->name('customers.deactivate');
+
+
+    Route::post(
+        '/customers/{customer}/activities',
+        [ActivityController::class, 'store']
+    )->name('customers.activities.store');
+
 
     /*
     |--------------------------------------------------------------------------
@@ -112,6 +129,16 @@ Route::middleware('auth')->group(function () {
         '/customer-imports/{importBatch}/execute',
         [CustomerImportController::class, 'execute']
     )->name('customer-imports.execute');
+
+    Route::post(
+        '/customer-imports/{importBatch}/validate',
+        [CustomerImportController::class, 'validateChunk']
+    )->name('customer-imports.validate');
+
+    Route::put(
+        '/customer-imports/{importBatch}/rows/{importRow}',
+        [CustomerImportController::class, 'updateRow']
+    )->name('customer-imports.rows.update');
 
     Route::delete(
         '/customer-imports/{importBatch}',

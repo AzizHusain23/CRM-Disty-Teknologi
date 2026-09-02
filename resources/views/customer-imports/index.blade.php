@@ -55,6 +55,24 @@
 
         <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-4">
+                <p class="text-sm text-slate-500">Klik judul kolom untuk mengurutkan.</p>
+
+                <form method="GET" class="flex items-center gap-2 text-sm">
+                    @foreach (request()->except('per_page', 'page') as $key => $value)
+                        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                    @endforeach
+                    <label for="per_page" class="text-slate-500">Tampilkan</label>
+                    <select id="per_page" name="per_page" onchange="this.form.submit()"
+                        class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                        @foreach ($perPageOptions as $option)
+                            <option value="{{ $option }}" @selected($perPage === $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                    <span class="text-slate-500">batch</span>
+                </form>
+            </div>
+
             <div class="overflow-x-auto">
 
                 <table class="min-w-full divide-y divide-slate-200">
@@ -64,27 +82,27 @@
                         <tr>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                File
+                                @include('components.table-sort', ['label' => 'File', 'column' => 'original_filename'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Progress
+                                @include('components.table-sort', ['label' => 'Progress', 'column' => 'imported_rows'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Total
+                                @include('components.table-sort', ['label' => 'Total', 'column' => 'total_rows'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Duplicate
+                                @include('components.table-sort', ['label' => 'Duplicate', 'column' => 'duplicate_rows'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Invalid
+                                @include('components.table-sort', ['label' => 'Invalid', 'column' => 'invalid_rows'])
                             </th>
 
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                Status
+                                @include('components.table-sort', ['label' => 'Status', 'column' => 'status'])
                             </th>
 
                             <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">

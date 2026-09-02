@@ -622,7 +622,7 @@
                         Batal
                     </a>
 
-                    <button type="submit"
+                    <button id="upload-submit-button" type="submit"
                         class="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
                         Periksa & Analisis File
                     </button>
@@ -633,6 +633,211 @@
 
         </div>
 
+
+
+        {{-- Validation progress --}}
+        <div id="validation-progress-card" class="hidden rounded-2xl border border-blue-200 bg-white p-6 shadow-sm">
+
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900">
+                        Memvalidasi File Excel
+                    </h3>
+                    <p id="validation-message" class="mt-1 text-sm text-slate-500">
+                        Menyiapkan validasi...
+                    </p>
+                </div>
+
+                <span id="validation-status-badge" class="inline-flex items-center rounded-lg bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700">
+                    Validating
+                </span>
+            </div>
+
+            <div class="mt-6">
+                <div class="mb-2 flex items-center justify-between">
+                    <span id="validation-percent" class="text-sm font-bold text-blue-700">0%</span>
+                    <span id="validation-count" class="text-sm font-medium text-slate-600">0 / 0 baris</span>
+                </div>
+
+                <div class="h-4 overflow-hidden rounded-full bg-slate-200">
+                    <div id="validation-bar" class="h-full rounded-full bg-blue-700 transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                    <p class="text-sm text-slate-500">Total</p>
+                    <p id="validation-total" class="mt-2 text-2xl font-bold text-slate-900">0</p>
+                </div>
+                <div class="rounded-xl border border-green-200 bg-green-50 p-5">
+                    <p class="text-sm text-green-700">Ready</p>
+                    <p id="validation-ready" class="mt-2 text-2xl font-bold text-green-800">0</p>
+                </div>
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-5">
+                    <p class="text-sm text-amber-700">Duplicate</p>
+                    <p id="validation-duplicate" class="mt-2 text-2xl font-bold text-amber-800">0</p>
+                </div>
+                <div class="rounded-xl border border-red-200 bg-red-50 p-5">
+                    <p class="text-sm text-red-700">Invalid</p>
+                    <p id="validation-invalid" class="mt-2 text-2xl font-bold text-red-800">0</p>
+                </div>
+            </div>
+
+            <div id="validation-error" class="mt-6 hidden rounded-xl bg-red-50 px-5 py-4 text-sm text-red-800"></div>
+        </div>
+
     </div>
 
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.querySelector('form[action="{{ route('customer-imports.store') }}"]');
+    const fileInput = document.getElementById('file');
+    const submitButton = document.getElementById('upload-submit-button');
+    const card = document.getElementById('validation-progress-card');
+
+    if (!form || !fileInput || !submitButton || !card) {
+        return;
+    }
+
+    const csrfToken = @json(csrf_token());
+
+    const message = document.getElementById('validation-message');
+    const statusBadge = document.getElementById('validation-status-badge');
+    const percent = document.getElementById('validation-percent');
+    const count = document.getElementById('validation-count');
+    const bar = document.getElementById('validation-bar');
+    const total = document.getElementById('validation-total');
+    const ready = document.getElementById('validation-ready');
+    const duplicate = document.getElementById('validation-duplicate');
+    const invalid = document.getElementById('validation-invalid');
+    const errorBox = document.getElementById('validation-error');
+
+    let running = false;
+
+    const formatNumber = value => new Intl.NumberFormat('id-ID').format(value ?? 0);
+
+    function render(data) {
+        const percentage = Number(data.percentage ?? 0);
+        bar.style.width = Math.min(100, percentage) + '%';
+        percent.textContent = percentage.toFixed(2) + '%';
+        count.textContent = formatNumber(data.validated) + ' / ' + formatNumber(data.total) + ' baris';
+        total.textContent = formatNumber(data.total);
+        ready.textContent = formatNumber(data.ready);
+        duplicate.textContent = formatNumber(data.duplicate);
+        invalid.textContent = formatNumber(data.invalid);
+
+        if (data.status === 'ready') {
+            message.textContent = 'Validasi selesai. Membuka preview import...';
+            statusBadge.textContent = 'Selesai';
+            statusBadge.className = 'inline-flex items-center rounded-lg bg-green-100 px-4 py-2 text-sm font-semibold text-green-700';
+            bar.className = 'h-full rounded-full bg-green-600 transition-all duration-300';
+            return;
+        }
+
+        if (data.status === 'failed') {
+            message.textContent = 'Validasi gagal.';
+            statusBadge.textContent = 'Gagal';
+            statusBadge.className = 'inline-flex items-center rounded-lg bg-red-100 px-4 py-2 text-sm font-semibold text-red-700';
+            bar.className = 'h-full rounded-full bg-red-600 transition-all duration-300';
+            errorBox.textContent = data.error_message || data.message || 'Validasi gagal dilakukan.';
+            errorBox.classList.remove('hidden');
+            return;
+        }
+
+        message.textContent = 'Validasi berjalan bertahap agar request tidak timeout.';
+    }
+
+    async function validateNext(validateUrl, redirectUrl) {
+        if (!running) return;
+
+        try {
+            const response = await fetch(validateUrl, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            const data = await response.json();
+
+            render(data);
+
+            if (!response.ok || data.status === 'failed') {
+                throw new Error(data.error_message || data.message || 'Validasi gagal.');
+            }
+
+            if (data.status === 'ready') {
+                running = false;
+                window.location.href = redirectUrl;
+                return;
+            }
+
+            setTimeout(() => validateNext(validateUrl, redirectUrl), 100);
+        } catch (error) {
+            running = false;
+            errorBox.textContent = error.message || 'Koneksi terputus. Muat ulang halaman untuk mencoba lagi.';
+            errorBox.classList.remove('hidden');
+            submitButton.disabled = false;
+            submitButton.textContent = 'Coba Lagi';
+        }
+    }
+
+    form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+
+        if (running) return;
+
+        if (!fileInput.files.length) {
+            return;
+        }
+
+        running = true;
+        card.classList.remove('hidden');
+        errorBox.classList.add('hidden');
+        submitButton.disabled = true;
+        submitButton.textContent = 'Mengupload...';
+        statusBadge.textContent = 'Uploading';
+        statusBadge.className = 'inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700';
+        message.textContent = 'Menyimpan file ke server...';
+
+        try {
+            const formData = new FormData(form);
+            const response = await fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: formData,
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'File gagal diupload.');
+            }
+
+            submitButton.textContent = 'Memvalidasi...';
+            statusBadge.textContent = 'Validating';
+            statusBadge.className = 'inline-flex items-center rounded-lg bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700';
+
+            const validateUrl = data.validate_url;
+            const redirectUrl = data.redirect_url;
+            await validateNext(validateUrl, redirectUrl);
+        } catch (error) {
+            running = false;
+            errorBox.textContent = error.message || 'Upload gagal dilakukan.';
+            errorBox.classList.remove('hidden');
+            submitButton.disabled = false;
+            submitButton.textContent = 'Coba Lagi';
+            statusBadge.textContent = 'Gagal';
+            statusBadge.className = 'inline-flex items-center rounded-lg bg-red-100 px-4 py-2 text-sm font-semibold text-red-700';
+        }
+    });
+});
+</script>
 @endsection

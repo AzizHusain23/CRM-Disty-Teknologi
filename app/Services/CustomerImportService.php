@@ -6,9 +6,11 @@ use App\Models\Customer;
 use App\Models\ImportBatch;
 use App\Models\ImportRow;
 use App\Models\Institution;
+use App\Imports\CustomerValidationReadFilter;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class CustomerImportService
 {
@@ -21,6 +23,431 @@ class CustomerImportService
         'Lembaga' => 'institution',
         'Lainnya' => 'other',
     ];
+
+    /**
+     * Validasi file Excel secara bertahap.
+     *
+     * Satu request hanya membaca sebagian baris agar proses tidak menahan
+     * satu HTTP request selama puluhan detik.
+     */
+    public function validateChunk(
+        ImportBatch $batch,
+        int $chunkSize = 100
+    ): array {
+        $chunkSize = max(25, min($chunkSize, 250));
+
+        if ((int) $batch->total_rows === 0 && $batch->rows()->count() === 0) {
+            $this->prepareValidation($batch);
+        }
+
+        $batch->refresh();
+        $total = (int) $batch->total_rows;
+
+        if ($total === 0) {
+            $batch->update([
+                'status' => 'ready',
+                'error_message' => null,
+            ]);
+
+            return $this->getValidationProgress($batch);
+        }
+
+        $processed = $batch->rows()->count();
+
+        if ($processed >= $total) {
+            $batch->update([
+                'status' => 'ready',
+                'error_message' => null,
+            ]);
+
+            return $this->getValidationProgress($batch);
+        }
+
+        $startRow = $processed + 2;
+        $endRow = min($startRow + $chunkSize - 1, $total + 1);
+
+        $path = \Storage::disk('local')->path($batch->stored_path);
+
+        $reader = IOFactory::createReaderForFile($path);
+        $reader->setReadDataOnly(true);
+        $reader->setReadFilter(
+            new CustomerValidationReadFilter($startRow, $endRow)
+        );
+
+        $spreadsheet = $reader->load($path);
+        $sheet = $spreadsheet->getSheetByName('customers');
+
+        if ($sheet === null) {
+            throw new \RuntimeException('Sheet customers tidak ditemukan.');
+        }
+
+        $values = $sheet->rangeToArray(
+            "A{$startRow}:H{$endRow}",
+            null,
+            true,
+            false
+        );
+
+        $keys = [
+            'nama',
+            'email',
+            'nomor_telepon',
+            'nomor_dokumen',
+            'nama_instansi',
+            'jenis_instansi',
+            'kota',
+            'provinsi',
+        ];
+
+        $existingKeys = $this->getExistingCustomerKeys();
+        $batchKeys = $batch->rows()
+            ->where('status', 'ready')
+            ->whereNotNull('dedupe_key')
+            ->pluck('dedupe_key')
+            ->flip()
+            ->all();
+
+        $readyCount = 0;
+        $duplicateCount = 0;
+        $invalidCount = 0;
+
+        DB::transaction(function () use (
+            $batch,
+            $values,
+            $keys,
+            $startRow,
+            $existingKeys,
+            &$batchKeys,
+            &$readyCount,
+            &$duplicateCount,
+            &$invalidCount,
+        ): void {
+            foreach ($values as $offset => $valuesRow) {
+                $rawData = [];
+
+                foreach ($keys as $index => $key) {
+                    $rawData[$key] = $valuesRow[$index] ?? null;
+                }
+
+                $data = $this->normalizeRow($rawData);
+                $analysis = $this->analyzeRow($data, $existingKeys, $batchKeys);
+
+                ImportRow::create([
+                    'import_batch_id' => $batch->id,
+                    'sheet_name' => 'customers',
+                    'row_number' => ($startRow + $offset),
+                    'raw_data' => $rawData,
+                    'name' => $data['name'],
+                    'email' => $data['email'],
+                    'phone' => $data['phone'],
+                    'document_number' => $data['document_number'],
+                    'institution_name' => $data['institution_name'],
+                    'institution_type' => $data['institution_type'],
+                    'normalized_name' => $data['normalized_name'],
+                    'normalized_email' => $data['normalized_email'],
+                    'normalized_document_number' => $data['normalized_document_number'],
+                    'dedupe_key' => $analysis['dedupe_key'],
+                    'status' => $analysis['status'],
+                    'duplicate_reason' => $analysis['duplicate_reason'],
+                    'error_message' => $analysis['error_message'],
+                ]);
+
+                if ($analysis['status'] === 'ready') {
+                    $readyCount++;
+                    if ($analysis['dedupe_key'] !== null) {
+                        $batchKeys[$analysis['dedupe_key']] = true;
+                    }
+                } elseif ($analysis['status'] === 'duplicate') {
+                    $duplicateCount++;
+                } else {
+                    $invalidCount++;
+                }
+            }
+        });
+
+        if ($readyCount > 0) {
+            $batch->increment('ready_rows', $readyCount);
+        }
+
+        if ($duplicateCount > 0) {
+            $batch->increment('duplicate_rows', $duplicateCount);
+        }
+
+        if ($invalidCount > 0) {
+            $batch->increment('invalid_rows', $invalidCount);
+        }
+
+        $batch->refresh();
+        $validated = $batch->rows()->count();
+
+        $batch->update([
+            'status' => $validated >= $total ? 'ready' : 'validating',
+            'error_message' => null,
+        ]);
+
+        return $this->getValidationProgress($batch);
+    }
+
+    public function getValidationProgress(ImportBatch $batch): array
+    {
+        $batch->refresh();
+
+        $validated = $batch->rows()->count();
+        $total = (int) $batch->total_rows;
+        $ready = (int) $batch->ready_rows;
+        $duplicate = (int) $batch->duplicate_rows;
+        $invalid = (int) $batch->invalid_rows;
+
+        $percentage = $total > 0
+            ? round(($validated / $total) * 100, 2)
+            : 0;
+
+        return [
+            'success' => true,
+            'status' => $batch->status,
+            'total' => $total,
+            'validated' => $validated,
+            'remaining' => max(0, $total - $validated),
+            'ready' => $ready,
+            'duplicate' => $duplicate,
+            'invalid' => $invalid,
+            'percentage' => $percentage,
+            'error_message' => $batch->error_message,
+        ];
+    }
+
+    public function updateValidationRow(
+        ImportBatch $batch,
+        ImportRow $importRow,
+        array $input
+    ): array {
+        if ($importRow->status === 'imported') {
+            throw new \RuntimeException('Data yang sudah diimport tidak dapat diedit dari preview.');
+        }
+
+        $rawData = $importRow->raw_data ?? [];
+        $rawData['nama'] = $input['name'] ?? null;
+        $rawData['email'] = $input['email'] ?? null;
+        $rawData['nomor_telepon'] = $input['phone'] ?? null;
+        $rawData['nomor_dokumen'] = $input['document_number'] ?? null;
+        $rawData['nama_instansi'] = $input['institution_name'] ?? null;
+        $rawData['jenis_instansi'] = $input['institution_type'] ?? null;
+        $rawData['kota'] = $input['city'] ?? null;
+        $rawData['provinsi'] = $input['province'] ?? null;
+
+        $data = $this->normalizeRow($rawData);
+        $existingKeys = $this->getExistingCustomerKeys();
+        $batchKeys = $batch->rows()
+            ->where('status', 'ready')
+            ->where('id', '!=', $importRow->id)
+            ->whereNotNull('dedupe_key')
+            ->pluck('dedupe_key')
+            ->flip()
+            ->all();
+
+        $analysis = $this->analyzeRow($data, $existingKeys, $batchKeys);
+        $oldStatus = $importRow->status;
+        $newStatus = $analysis['status'];
+
+        DB::transaction(function () use (
+            $batch,
+            $importRow,
+            $rawData,
+            $data,
+            $analysis,
+            $oldStatus,
+            $newStatus,
+        ): void {
+            $importRow->update([
+                'raw_data' => $rawData,
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+                'document_number' => $data['document_number'],
+                'institution_name' => $data['institution_name'],
+                'institution_type' => $data['institution_type'],
+                'normalized_name' => $data['normalized_name'],
+                'normalized_email' => $data['normalized_email'],
+                'normalized_document_number' => $data['normalized_document_number'],
+                'dedupe_key' => $analysis['dedupe_key'],
+                'status' => $newStatus,
+                'duplicate_reason' => $analysis['duplicate_reason'],
+                'error_message' => $analysis['error_message'],
+            ]);
+
+            if ($oldStatus !== $newStatus) {
+                $counter = [
+                    'ready' => 'ready_rows',
+                    'duplicate' => 'duplicate_rows',
+                    'invalid' => 'invalid_rows',
+                ];
+
+                if (isset($counter[$oldStatus])) {
+                    $batch->decrement($counter[$oldStatus]);
+                }
+
+                if (isset($counter[$newStatus])) {
+                    $batch->increment($counter[$newStatus]);
+                }
+            }
+        });
+
+        $batch->refresh();
+
+        if ($batch->rows()->count() >= (int) $batch->total_rows) {
+            $batch->update([
+                'status' => 'ready',
+                'error_message' => null,
+            ]);
+        }
+
+        return [
+            'success' => true,
+            'status' => $newStatus,
+            'message' => match ($newStatus) {
+                'ready' => 'Baris berhasil diperbaiki dan siap diimport.',
+                'duplicate' => 'Baris sudah diperbaiki, tetapi terdeteksi sebagai duplicate.',
+                default => $analysis['error_message'] ?: 'Baris masih invalid.',
+            },
+            ...$this->getValidationProgress($batch),
+        ];
+    }
+
+    private function prepareValidation(ImportBatch $batch): void
+    {
+        $path = \Storage::disk('local')->path($batch->stored_path);
+
+        $reader = IOFactory::createReaderForFile($path);
+        $reader->setReadDataOnly(true);
+
+        $worksheetInfo = $reader->listWorksheetInfo();
+
+        if (count($worksheetInfo) !== 1) {
+            throw new \RuntimeException(
+                'File Excel harus memiliki tepat satu sheet dengan nama "customers".'
+            );
+        }
+
+        if (($worksheetInfo[0]['worksheetName'] ?? null) !== 'customers') {
+            throw new \RuntimeException('Nama sheet harus "customers".');
+        }
+
+        $reader->setReadFilter(
+            new CustomerValidationReadFilter(1, 1)
+        );
+
+        $spreadsheet = $reader->load($path);
+        $sheet = $spreadsheet->getSheetByName('customers');
+
+        if ($sheet === null) {
+            throw new \RuntimeException('Sheet customers tidak ditemukan.');
+        }
+
+        $headers = $sheet->rangeToArray(
+            'A1:H1',
+            null,
+            true,
+            false
+        )[0] ?? [];
+
+        $headers = array_map(
+            static fn ($value) => trim((string) $value),
+            $headers
+        );
+
+        $requiredHeaders = [
+            'Nama',
+            'Email',
+            'Nomor Telepon',
+            'Nomor Dokumen',
+            'Nama Instansi',
+            'Jenis Instansi',
+            'Kota',
+            'Provinsi',
+        ];
+
+        if ($headers !== $requiredHeaders) {
+            throw new \RuntimeException(
+                'Header Excel tidak sesuai standar CRM. Gunakan tombol "Download Template Excel".'
+            );
+        }
+
+        $totalRows = max(
+            0,
+            ((int) ($worksheetInfo[0]['totalRows'] ?? 1)) - 1
+        );
+
+        $batch->update([
+            'status' => 'validating',
+            'total_rows' => $totalRows,
+            'ready_rows' => 0,
+            'duplicate_rows' => 0,
+            'invalid_rows' => 0,
+            'error_message' => null,
+            'completed_at' => null,
+        ]);
+    }
+
+    private function analyzeRow(
+        array $data,
+        array $existingKeys,
+        array $batchKeys
+    ): array {
+        $status = 'ready';
+        $duplicateReason = null;
+        $errorMessage = null;
+
+        if ($data['name'] === null) {
+            $status = 'invalid';
+            $errorMessage = 'Nama customer wajib diisi.';
+        }
+
+        if (
+            $status === 'ready'
+            && $data['email'] !== null
+            && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)
+        ) {
+            $status = 'invalid';
+            $errorMessage = 'Format email tidak valid.';
+        }
+
+        if (
+            $status === 'ready'
+            && $data['institution_type'] === null
+            && $data['institution_name'] !== null
+        ) {
+            $status = 'invalid';
+            $errorMessage = 'Jenis instansi wajib diisi jika Nama Instansi diisi.';
+        }
+
+        if (
+            $status === 'ready'
+            && $data['institution_type'] !== null
+            && !isset(self::ALLOWED_INSTITUTION_TYPES[$data['institution_type']])
+        ) {
+            $status = 'invalid';
+            $errorMessage = 'Jenis instansi tidak sesuai format standar CRM.';
+        }
+
+        if ($status === 'ready') {
+            $duplicateReason = $this->findDuplicateReason(
+                $data,
+                $existingKeys,
+                $batchKeys
+            );
+
+            if ($duplicateReason !== null) {
+                $status = 'duplicate';
+            }
+        }
+
+        return [
+            'status' => $status,
+            'duplicate_reason' => $duplicateReason,
+            'error_message' => $errorMessage,
+            'dedupe_key' => $this->buildDedupeKey($data),
+        ];
+    }
 
     public function processSheet(
         ImportBatch $batch,
@@ -346,7 +773,7 @@ class CustomerImportService
                                 ?? null,
 
                             'status' =>
-                                'active',
+                                'prospect',
 
                             'source' =>
                                 'excel',

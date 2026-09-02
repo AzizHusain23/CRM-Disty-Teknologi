@@ -6,21 +6,38 @@ use App\Http\Requests\StoreInstitutionRequest;
 use App\Http\Requests\UpdateInstitutionRequest;
 use App\Models\Institution;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class InstitutionController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
+        $sort = $request->string('sort')->toString();
+        $sort = in_array($sort, ['name', 'type', 'city', 'province', 'customers_count'], true)
+            ? $sort
+            : 'name';
+
+        $direction = strtolower($request->string('direction')->toString());
+        $direction = in_array($direction, ['asc', 'desc'], true)
+            ? $direction
+            : 'asc';
+
+        $perPageOptions = [25, 50, 100, 200, 500];
+        $perPage = (int) $request->integer('per_page', 50);
+        if (!in_array($perPage, $perPageOptions, true)) {
+            $perPage = 50;
+        }
+
         $institutions = Institution::query()
             ->withCount('customers')
-            ->orderBy('name')
-            ->paginate(15)
+            ->orderBy($sort, $direction)
+            ->paginate($perPage)
             ->withQueryString();
 
         return view(
             'institutions.index',
-            compact('institutions')
+            compact('institutions', 'sort', 'direction', 'perPage', 'perPageOptions')
         );
     }
 

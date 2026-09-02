@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Exports\CustomerImportTemplateExport;
-use App\Imports\CustomerExcelImport;
 use App\Models\ImportBatch;
+use App\Models\ImportRow;
 use App\Services\CustomerImportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -12,24 +12,28 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use Throwable;
 
 class CustomerImportController extends Controller
 {
-    private const REQUIRED_HEADERS = [
-        'Nama',
-        'Email',
-        'Nomor Telepon',
-        'Nomor Dokumen',
-        'Nama Instansi',
-        'Jenis Instansi',
-        'Kota',
-        'Provinsi',
-    ];
-
-    public function index(): View
+    public function index(Request $request): View
     {
+        $sort = $request->string('sort')->toString();
+        $sort = in_array($sort, ['original_filename', 'imported_rows', 'total_rows', 'duplicate_rows', 'invalid_rows', 'status'], true)
+            ? $sort
+            : 'created_at';
+
+        $direction = strtolower($request->string('direction')->toString());
+        $direction = in_array($direction, ['asc', 'desc'], true)
+            ? $direction
+            : 'desc';
+
+        $perPageOptions = [25, 50, 100, 200];
+        $perPage = (int) $request->integer('per_page', 50);
+        if (!in_array($perPage, $perPageOptions, true)) {
+            $perPage = 50;
+        }
+
         $batches = ImportBatch::query()
             ->with('user')
             ->withCount([
@@ -40,12 +44,13 @@ class CustomerImportController extends Controller
                     $query->where('status', 'ready');
                 },
             ])
-            ->latest()
-            ->paginate(15);
+            ->orderBy($sort, $direction)
+            ->paginate($perPage)
+            ->withQueryString();
 
         return view(
             'customer-imports.index',
-            compact('batches')
+            compact('batches', 'sort', 'direction', 'perPage', 'perPageOptions')
         );
     }
 
@@ -65,9 +70,8 @@ class CustomerImportController extends Controller
     }
 
     public function store(
-        Request $request,
-        CustomerImportService $service
-    ): RedirectResponse {
+        Request $request
+    ): JsonResponse|RedirectResponse {
         $validated = $request->validate([
             'file' => [
                 'required',
@@ -79,112 +83,184 @@ class CustomerImportController extends Controller
 
         $file = $validated['file'];
 
-        $storedPath = Storage::disk('local')
-            ->putFile(
-                'imports',
-                $file
-            );
+        $storedPath = Storage::disk('local')->putFile('imports', $file);
 
         if ($storedPath === false) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File gagal disimpan ke server.',
+                ], 500);
+            }
+
             return back()
                 ->withErrors([
-                    'file' =>
-                        'File gagal disimpan ke server.',
+                    'file' => 'File gagal disimpan ke server.',
                 ])
                 ->withInput();
         }
 
         $batch = ImportBatch::create([
-            'user_id' =>
-                $request->user()->id,
-
-            'original_filename' =>
-                $file->getClientOriginalName(),
-
-            'stored_path' =>
-                $storedPath,
-
-            'status' =>
-                'validating',
+            'user_id' => $request->user()->id,
+            'original_filename' => $file->getClientOriginalName(),
+            'stored_path' => $storedPath,
+            'status' => 'validating',
         ]);
 
-        try {
-            $absolutePath =
-                Storage::disk('local')
-                    ->path($storedPath);
-
-            $this->validateWorkbook(
-                $absolutePath
-            );
-
-            Excel::import(
-                new CustomerExcelImport(
-                    $batch,
-                    $service
-                ),
-                $storedPath,
-                'local'
-            );
-
-            $batch->refresh();
-
-            $batch->update([
-                'status' =>
-                    'ready',
-
-                'error_message' =>
-                    null,
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'batch_id' => $batch->id,
+                'message' => 'File berhasil diupload. Validasi akan dijalankan secara bertahap.',
+                'validate_url' => route('customer-imports.validate', $batch),
+                'redirect_url' => route('customer-imports.show', $batch),
             ]);
+        }
 
-            return redirect()
-                ->route(
-                    'customer-imports.show',
-                    $batch
-                )
-                ->with(
-                    'success',
-                    'File berhasil dianalisis. Periksa hasil preview sebelum melakukan import.'
-                );
+        return redirect()
+            ->route('customer-imports.show', $batch)
+            ->with(
+                'success',
+                'File berhasil diupload. Validasi akan dijalankan secara bertahap.'
+            );
+    }
+
+    public function validateChunk(
+        Request $request,
+        ImportBatch $importBatch,
+        CustomerImportService $service
+    ): JsonResponse {
+        if (in_array($importBatch->status, ['ready', 'processing', 'completed'], true)) {
+            return response()->json([
+                'success' => true,
+                ...$service->getValidationProgress($importBatch),
+            ]);
+        }
+
+        if ($importBatch->status === 'failed') {
+            return response()->json([
+                'success' => false,
+                'message' => $importBatch->error_message ?: 'Validasi sebelumnya gagal.',
+                'error_message' => $importBatch->error_message,
+                ...$service->getValidationProgress($importBatch),
+            ], 422);
+        }
+
+        try {
+            $progress = $service->validateChunk($importBatch, 100);
+
+            return response()->json($progress);
         } catch (Throwable $e) {
             report($e);
 
-            $batch->update([
-                'status' =>
-                    'failed',
-
-                'error_message' =>
-                    $e->getMessage(),
+            $importBatch->refresh();
+            $importBatch->update([
+                'status' => 'failed',
+                'error_message' => $e->getMessage(),
             ]);
 
-            return redirect()
-                ->route(
-                    'customer-imports.show',
-                    $batch
-                )
-                ->with(
-                    'error',
-                    'File tidak memenuhi standar import CRM.'
-                );
+            return response()->json([
+                'success' => false,
+                'message' => 'Validasi file gagal dilakukan.',
+                'error_message' => $e->getMessage(),
+                ...$service->getValidationProgress($importBatch),
+            ], 500);
+        }
+    }
+
+    public function updateRow(
+        Request $request,
+        ImportBatch $importBatch,
+        ImportRow $importRow,
+        CustomerImportService $service
+    ): JsonResponse {
+        if ($importRow->import_batch_id !== $importBatch->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Baris import tidak sesuai dengan batch yang dipilih.',
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'document_number' => ['nullable', 'string', 'max:100'],
+            'institution_name' => ['nullable', 'string', 'max:255'],
+            'institution_type' => ['nullable', 'string', 'max:50'],
+            'city' => ['nullable', 'string', 'max:100'],
+            'province' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        try {
+            $result = $service->updateValidationRow($importBatch, $importRow, $validated);
+
+            return response()->json($result);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Baris gagal diperbarui.',
+                'error_message' => $e->getMessage(),
+            ], 422);
         }
     }
 
     public function show(
+        Request $request,
         ImportBatch $importBatch
     ): View {
         $importBatch->load('user');
 
-        $rows =
-            $importBatch->rows()
-                ->orderBy('sheet_name')
-                ->orderBy('row_number')
-                ->paginate(50)
-                ->withQueryString();
+        $sort = $request->string('sort')->toString();
+        $sort = in_array($sort, [
+            'sheet_name',
+            'row_number',
+            'name',
+            'email',
+            'phone',
+            'institution_name',
+            'institution_type',
+            'status',
+        ], true)
+            ? $sort
+            : 'row_number';
+
+        $direction = strtolower($request->string('direction')->toString());
+        $direction = in_array($direction, ['asc', 'desc'], true)
+            ? $direction
+            : 'asc';
+
+        $perPageOptions = [25, 50, 100, 200, 500];
+        $perPage = (int) $request->integer('per_page', 50);
+        if (!in_array($perPage, $perPageOptions, true)) {
+            $perPage = 50;
+        }
+
+        $rowsQuery = $importBatch->rows();
+
+        if ($request->filled('status')) {
+            $status = $request->string('status')->toString();
+            if (in_array($status, ['ready', 'duplicate', 'invalid', 'imported'], true)) {
+                $rowsQuery->where('status', $status);
+            }
+        }
+
+        $rows = $rowsQuery
+            ->orderBy($sort, $direction)
+            ->paginate($perPage)
+            ->withQueryString();
 
         return view(
             'customer-imports.show',
             compact(
                 'importBatch',
-                'rows'
+                'rows',
+                'sort',
+                'direction',
+                'perPage',
+                'perPageOptions'
             )
         );
     }
@@ -392,69 +468,4 @@ class CustomerImportController extends Controller
             );
     }
 
-    private function validateWorkbook(
-        string $path
-    ): void {
-        $spreadsheet =
-            IOFactory::load($path);
-
-        $sheetNames =
-            $spreadsheet->getSheetNames();
-
-        if (
-            count($sheetNames) !== 1
-        ) {
-            throw new \RuntimeException(
-                'File Excel harus memiliki tepat satu sheet dengan nama "customers".'
-            );
-        }
-
-        if (
-            $sheetNames[0] !== 'customers'
-        ) {
-            throw new \RuntimeException(
-                'Nama sheet harus "customers".'
-            );
-        }
-
-        $sheet =
-            $spreadsheet
-                ->getSheetByName(
-                    'customers'
-                );
-
-        if ($sheet === null) {
-            throw new \RuntimeException(
-                'Sheet customers tidak ditemukan.'
-            );
-        }
-
-        $headers =
-            $sheet
-                ->rangeToArray(
-                    'A1:H1',
-                    null,
-                    true,
-                    false
-                )[0];
-
-        $headers =
-            array_map(
-                static function ($value) {
-                    return trim(
-                        (string) $value
-                    );
-                },
-                $headers
-            );
-
-        if (
-            $headers
-            !== self::REQUIRED_HEADERS
-        ) {
-            throw new \RuntimeException(
-                'Header Excel tidak sesuai standar CRM. Gunakan tombol "Download Template Excel".'
-            );
-        }
-    }
 }

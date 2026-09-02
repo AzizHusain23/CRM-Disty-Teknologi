@@ -55,16 +55,6 @@ class UpdateCustomerRequest extends FormRequest
                 'max:100',
             ],
 
-            'status' => [
-                'required',
-                'in:active,prospect,inactive,repeat',
-            ],
-
-            'source' => [
-                'required',
-                'in:manual,excel,academy,website,campaign,import',
-            ],
-
             'notes' => [
                 'nullable',
                 'string',
