@@ -2,9 +2,13 @@
 
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerImportController;
 use App\Http\Controllers\InstitutionController;
+use App\Http\Controllers\FollowUpController;
 use App\Http\Controllers\TrainingCategoryController;
 use App\Http\Controllers\TrainingController;
 use Illuminate\Support\Facades\Route;
@@ -41,12 +45,13 @@ Route::middleware('auth')->group(function () {
 
     Route::get(
         '/dashboard',
-        function () {
-            return view(
-                'dashboard.index'
-            );
-        }
+        [DashboardController::class, 'index']
     )->name('dashboard');
+
+    Route::get(
+        '/reports',
+        [ReportController::class, 'index']
+    )->name('reports.index');
 
     Route::post(
         '/logout',
@@ -88,10 +93,30 @@ Route::middleware('auth')->group(function () {
     )->name('customers.deactivate');
 
 
+    Route::get(
+        '/activities',
+        [ActivityController::class, 'index']
+    )->name('activities.index');
+
     Route::post(
         '/customers/{customer}/activities',
         [ActivityController::class, 'store']
     )->name('customers.activities.store');
+
+    Route::resource(
+        'follow-ups',
+        FollowUpController::class
+    )->except(['show']);
+
+    Route::post(
+        '/follow-ups/{followUp}/complete',
+        [FollowUpController::class, 'complete']
+    )->name('follow-ups.complete');
+
+    Route::post(
+        '/follow-ups/{followUp}/cancel',
+        [FollowUpController::class, 'cancel']
+    )->name('follow-ups.cancel');
 
 
     /*
@@ -175,5 +200,17 @@ Route::middleware('auth')->group(function () {
         'trainings',
         TrainingController::class
     );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Registration / Pendaftaran Training
+    |--------------------------------------------------------------------------
+    */
+
+    Route::resource(
+        'registrations',
+        RegistrationController::class
+    )->except(['show']);
 
 });

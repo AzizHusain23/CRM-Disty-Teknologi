@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
+use App\Models\Activity;
 use App\Models\Customer;
 use App\Models\Institution;
 use Illuminate\Http\RedirectResponse;
@@ -164,7 +165,12 @@ class CustomerController extends Controller
     ): View {
         $customer->load([
             'institution',
-            'registrations.training.category',
+            'registrations' => function ($query) {
+                $query->with('training.category')
+                    ->orderByRaw('training_date IS NULL')
+                    ->orderByDesc('training_date')
+                    ->orderByDesc('created_at');
+            },
             'activities.user',
             'followUps.assignedUser',
         ]);
@@ -178,19 +184,41 @@ class CustomerController extends Controller
 
     public function activate(Customer $customer): RedirectResponse
     {
-        if ($customer->status === 'active') {
+        if (!in_array($customer->status, ['prospect', 'inactive'], true)) {
             return redirect()
                 ->route('customers.show', $customer)
-                ->with('error', 'Customer sudah berstatus Active.');
+                ->with('error', 'Customer dengan status saat ini tidak dapat diaktifkan kembali.');
         }
 
-        $customer->update([
-            'status' => 'active',
-        ]);
+        $wasInactive = $customer->status === 'inactive';
+
+        DB::transaction(function () use ($customer, $wasInactive) {
+            $customer->update([
+                'status' => 'active',
+            ]);
+
+            Activity::create([
+                'customer_id' => $customer->id,
+                'user_id' => auth()->id(),
+                'type' => 'note',
+                'subject' => $wasInactive
+                    ? 'Customer diaktifkan kembali'
+                    : 'Customer dikonversi menjadi Active',
+                'description' => $wasInactive
+                    ? 'Status customer diubah dari Inactive menjadi Active.'
+                    : 'Status customer diubah dari Prospect menjadi Active.',
+                'activity_at' => now(),
+            ]);
+        });
 
         return redirect()
             ->route('customers.show', $customer)
-            ->with('success', 'Customer berhasil dikonversi menjadi Active.');
+            ->with(
+                'success',
+                $wasInactive
+                    ? 'Customer berhasil diaktifkan kembali.'
+                    : 'Customer berhasil dikonversi menjadi Active.'
+            );
     }
 
     public function deactivate(Customer $customer): RedirectResponse

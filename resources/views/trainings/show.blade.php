@@ -61,6 +61,13 @@
 
             <div class="flex flex-wrap gap-2">
 
+                @if ($training->is_active)
+                    <a href="{{ route('registrations.create', ['training_id' => $training->id]) }}"
+                        class="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+                        + Daftarkan Customer
+                    </a>
+                @endif
+
                 <a href="{{ route('trainings.edit', $training) }}"
                     class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                     Edit

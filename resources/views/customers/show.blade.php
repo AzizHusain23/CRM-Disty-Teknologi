@@ -66,6 +66,15 @@
                             Jadikan Inactive
                         </button>
                     </form>
+                @elseif ($customer->status === 'inactive')
+                    <form method="POST" action="{{ route('customers.activate', $customer) }}"
+                        onsubmit="return confirm('Aktifkan kembali customer ini menjadi Active?')">
+                        @csrf
+                        <button type="submit"
+                            class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100">
+                            Aktifkan Kembali
+                        </button>
+                    </form>
                 @endif
 
                 <a href="{{ route('customers.edit', $customer) }}"
@@ -224,9 +233,22 @@
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div class="border-b border-slate-200 px-6 py-5">
                         <h3 class="text-base font-semibold text-slate-900">Histori Pelatihan</h3>
-                        <p class="mt-1 text-sm text-slate-500">
-                            Prospect belum memiliki akses perekaman pelatihan sampai dikonversi menjadi Active.
-                        </p>
+                        <div class="mt-1 flex flex-wrap items-center justify-between gap-3">
+                            <p class="text-sm text-slate-500">
+                                @if (in_array($customer->status, ['active', 'repeat'], true))
+                                    Customer dapat dicatat mengikuti pelatihan melalui tombol di sebelah kanan.
+                                @else
+                                    Prospect/Inactive belum dapat dicatat masuk ke pelatihan.
+                                @endif
+                            </p>
+
+                            @if (in_array($customer->status, ['active', 'repeat'], true))
+                                <a href="{{ route('registrations.create', ['customer_id' => $customer->id]) }}"
+                                    class="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+                                    + Daftarkan Training
+                                </a>
+                            @endif
+                        </div>
                     </div>
 
                     <div class="divide-y divide-slate-200">
@@ -237,11 +259,35 @@
                                         <div class="font-semibold text-slate-900">{{ $registration->training->name }}</div>
                                         <div class="mt-1 text-sm text-slate-500">
                                             {{ $registration->training_date?->format('d M Y') ?: 'Tanggal belum tersedia' }}
+                                            · {{ $registration->registration_number ?: 'Tanpa nomor registrasi' }}
                                         </div>
+                                        @if ($registration->amount !== null)
+                                            <div class="mt-1 text-xs text-slate-400">Rp {{ number_format((float) $registration->amount, 0, ',', '.') }}</div>
+                                        @endif
                                     </div>
-                                    <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                                        {{ ucfirst($registration->status) }}
-                                    </span>
+                                    <div class="text-right">
+                                        @php
+                                            $registrationStatusClasses = match ($registration->status) {
+                                                'completed' => 'bg-green-100 text-green-700',
+                                                'confirmed' => 'bg-blue-100 text-blue-700',
+                                                'cancelled' => 'bg-red-100 text-red-700',
+                                                default => 'bg-amber-100 text-amber-700',
+                                            };
+                                            $registrationStatusLabels = [
+                                                'registered' => 'Registered',
+                                                'confirmed' => 'Confirmed',
+                                                'completed' => 'Completed',
+                                                'cancelled' => 'Cancelled',
+                                            ];
+                                        @endphp
+                                        <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $registrationStatusClasses }}">
+                                            {{ $registrationStatusLabels[$registration->status] ?? ucfirst($registration->status) }}
+                                        </span>
+                                        <a href="{{ route('registrations.edit', $registration) }}"
+                                            class="mt-2 inline-block text-xs font-medium text-slate-500 hover:text-slate-900 hover:underline">
+                                            Edit
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         @empty
@@ -287,8 +333,15 @@
                 </div>
 
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div class="border-b border-slate-200 px-6 py-5">
-                        <h3 class="text-base font-semibold text-slate-900">Follow Up</h3>
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5">
+                        <div>
+                            <h3 class="text-base font-semibold text-slate-900">Follow Up</h3>
+                            <p class="mt-1 text-sm text-slate-500">Jadwalkan tindakan berikutnya agar histori customer tetap terdokumentasi.</p>
+                        </div>
+                        <a href="{{ route('follow-ups.create', ['customer_id' => $customer->id]) }}"
+                            class="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+                            + Buat Follow Up
+                        </a>
                     </div>
 
                     <div class="divide-y divide-slate-200">

@@ -62,12 +62,22 @@
                     Pelatihan
                 </a>
 
-                <a href="#"
+                <a href="{{ route('registrations.index') }}"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+                    Pendaftaran Training
+                </a>
+
+                <a href="{{ route('activities.index') }}"
+                    class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+                    Aktivitas
+                </a>
+
+                <a href="{{ route('follow-ups.index') }}"
                     class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Follow Up
                 </a>
 
-                <a href="#"
+                <a href="{{ route('reports.index') }}"
                     class="flex items-center rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Laporan
                 </a>
