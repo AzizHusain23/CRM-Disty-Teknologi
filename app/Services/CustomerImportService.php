@@ -320,7 +320,7 @@ class CustomerImportService
         $reader = IOFactory::createReaderForFile($path);
         $reader->setReadDataOnly(true);
 
-        $worksheetInfo = $reader->listWorksheetInfo();
+        $worksheetInfo = $reader->listWorksheetInfo($path);
 
         if (count($worksheetInfo) !== 1) {
             throw new \RuntimeException(
